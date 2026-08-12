@@ -10,10 +10,34 @@ const admin = createClient(url, serviceKey)
 const OUTSIDER_EMAIL = 'outsider-rls-test@wee.com.br'
 const OUTSIDER_PASSWORD = 'senha12345'
 
+// Best-effort lookup + delete of any pre-existing user with this email.
+// Guards against orphaned state from a previous interrupted run (process
+// killed mid-test, an uncaught exception between beforeAll and afterAll,
+// deleteUser itself failing) — without this, a stale user from a bad prior
+// run makes every subsequent `npm run test:rls` fail at createUser with a
+// duplicate-email error, and nothing self-heals.
+async function deleteExistingOutsiderIfAny(): Promise<void> {
+  let page = 1
+  const perPage = 1000
+  for (;;) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+    const match = data.users.find((u) => u.email === OUTSIDER_EMAIL)
+    if (match) {
+      await admin.auth.admin.deleteUser(match.id)
+      return
+    }
+    if (data.users.length < perPage) return // no more pages
+    page += 1
+  }
+}
+
 describe('RLS: organizations isolation', () => {
   let outsiderUserId: string
 
   beforeAll(async () => {
+    await deleteExistingOutsiderIfAny()
+
     const { data, error } = await admin.auth.admin.createUser({
       email: OUTSIDER_EMAIL,
       password: OUTSIDER_PASSWORD,
