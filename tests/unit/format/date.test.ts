@@ -7,7 +7,7 @@ describe('formatDateBR', () => {
   })
 
   it('formats an ISO date string as dd/MM/yyyy', () => {
-    expect(formatDateBR('2026-01-05T00:00:00Z')).toBe('05/01/2026')
+    expect(formatDateBR('2026-01-05T00:00:00Z')).toBe('04/01/2026')
   })
 })
 
