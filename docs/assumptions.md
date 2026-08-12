@@ -10,6 +10,13 @@
   posteriores deve ser registrada aqui com status `NECESSITA VALIDAÇÃO
   CONTÁBIL` quando aplicável, conforme a seção 33 do Prompt Mestre.
 
+- O `supabase/config.toml` local (signup desabilitado, senha mínima 8,
+  confirmação de e-mail exigida) é apenas o template de desenvolvimento; o
+  projeto Supabase hospedado (produção) precisa ter essas mesmas opções
+  configuradas manualmente no dashboard de Auth (signup público desabilitado,
+  invite-only) — o `config.toml` não é aplicado automaticamente a um projeto
+  hospedado.
+
 ## Riscos conhecidos (Fase 0+1)
 
 - **Usuário de teste E2E não é semeado de forma reprodutível**: o arquivo
