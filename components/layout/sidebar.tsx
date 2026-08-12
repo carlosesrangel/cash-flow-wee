@@ -3,14 +3,18 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
+import { SignOutButton } from '@/components/layout/sign-out-button'
 
 export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Navegação principal" className="w-64 shrink-0 border-r bg-white p-4">
+    <nav
+      aria-label="Navegação principal"
+      className="flex w-64 shrink-0 flex-col border-r bg-white p-4"
+    >
       <div className="mb-6 text-lg font-semibold">WEE</div>
-      <ul className="space-y-1">
+      <ul className="flex-1 space-y-1">
         {NAV_ITEMS.map((item) => (
           <li key={item.href}>
             <Link
@@ -44,6 +48,9 @@ export function Sidebar() {
           </li>
         ))}
       </ul>
+      <div className="mt-6 border-t pt-4">
+        <SignOutButton className="block w-full rounded px-3 py-2 text-left text-sm text-neutral-600 hover:bg-neutral-100" />
+      </div>
     </nav>
   )
 }

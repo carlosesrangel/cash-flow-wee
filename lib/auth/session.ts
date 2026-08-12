@@ -22,7 +22,11 @@ export async function getCurrentMember(): Promise<CurrentMember> {
     .limit(1)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) {
+    throw new Error(`Falha ao carregar membership do usuário: ${error.message}`)
+  }
+
+  if (!data) return null
 
   return {
     orgId: data.org_id,
