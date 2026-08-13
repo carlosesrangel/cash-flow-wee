@@ -10,6 +10,7 @@
 
 ## Global Constraints
 
+- **Addendum (added during Task 9's review):** a shared `lib/olist/date.ts` module exporting `toOlistDateParam(date: Date): string` was extracted during Task 9's fix round — it formats a `Date` as `YYYY-MM-DD` in the `America/Sao_Paulo` timezone (NOT `date.toISOString().slice(0, 10)`, which is UTC-based and can shift the date by one day for timestamps with a local time past ~21:00, silently narrowing incremental-sync date filters). Any task below that shows a local `function toIsoDate(date: Date): string { return date.toISOString().slice(0, 10) }` (Tasks 11, 12, 13) must instead import and use `toOlistDateParam` from `@/lib/olist/date` — do not reintroduce the UTC-slice bug. Delete any local `toIsoDate` definition in those tasks' code and replace call sites with `toOlistDateParam`.
 - Base API URL: `https://api.tiny.com.br/public-api/v3`. Bearer token auth.
 - OAuth2 authorize: `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth` (`client_id`, `redirect_uri`, `scope=openid`, `response_type=code`).
 - OAuth2 token: `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token` (`grant_type=authorization_code` for the initial exchange; `grant_type=refresh_token` for renewal).
@@ -1912,10 +1913,6 @@ type OlistOrderDetail = {
   }> | null
 }
 
-function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
 export async function syncOrders(
   orgId: string,
   options: { since?: Date } = {}
@@ -1923,7 +1920,7 @@ export async function syncOrders(
   const admin = createAdminSupabaseClient()
   let received = 0
 
-  const query = options.since ? { dataAtualizacao: toIsoDate(options.since) } : {}
+  const query = options.since ? { dataAtualizacao: toOlistDateParam(options.since) } : {}
 
   for await (const page of paginateOlist<OlistOrderListItem>(orgId, '/pedidos', query)) {
     for (const listItem of page) {
