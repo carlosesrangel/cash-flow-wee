@@ -77,4 +77,24 @@ describe('paginateSumupTransactions', () => {
     expect(pages).toEqual([[]])
     expect(sumupFetch).toHaveBeenCalledTimes(1)
   })
+
+  it('terminates instead of looping forever when the next link is self-referential', async () => {
+    vi.mocked(sumupFetch).mockResolvedValue({
+      items: [{ transaction_code: 'A' }],
+      links: [{ rel: 'next', href: 'limit=1&oldest_ref=A' }],
+    })
+
+    const { paginateSumupTransactions } = await import('@/lib/sumup/paginate')
+    const pages: unknown[] = []
+    for await (const page of paginateSumupTransactions('MC-TEST', {}, 1)) {
+      pages.push(page)
+      if (pages.length > 10) throw new Error('generator did not terminate on repeated href')
+    }
+
+    // First page fetched with the href unseen (it gets recorded), second page
+    // fetched by following that href; on the second page the same href is
+    // seen again, so the loop breaks before a third fetch.
+    expect(pages).toEqual([[{ transaction_code: 'A' }], [{ transaction_code: 'A' }]])
+    expect(sumupFetch).toHaveBeenCalledTimes(2)
+  })
 })

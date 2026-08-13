@@ -10,6 +10,7 @@ export async function* paginateSumupTransactions<T>(
 ): AsyncGenerator<T[]> {
   const path = `/v2.1/merchants/${merchantCode}/transactions/history`
   let query: Record<string, string | number | undefined> | undefined = { ...baseQuery, limit: pageSize }
+  const seenHrefs = new Set<string>()
 
   while (query) {
     const page: HypermediaResponse<T> = await sumupFetch<HypermediaResponse<T>>(path, query)
@@ -20,6 +21,9 @@ export async function* paginateSumupTransactions<T>(
 
     const nextLink = page.links?.find((link) => link.rel === 'next')
     if (!nextLink) break
+
+    if (seenHrefs.has(nextLink.href)) break
+    seenHrefs.add(nextLink.href)
 
     // SumUp's `next` link `href` is a bare query string (no path/scheme),
     // e.g. "limit=1&merchant_code=...&oldest_ref=...". Parse it as query
