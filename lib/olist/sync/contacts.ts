@@ -1,5 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { toOlistDateParam } from '@/lib/olist/date'
 
 type OlistContact = {
   id: number
@@ -20,10 +21,6 @@ type OlistContact = {
   dataAtualizacao?: string | null
 }
 
-function toIsoDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
 export async function syncContacts(
   orgId: string,
   options: { since?: Date } = {}
@@ -31,7 +28,7 @@ export async function syncContacts(
   const admin = createAdminSupabaseClient()
   let received = 0
 
-  const query = options.since ? { dataAtualizacao: toIsoDate(options.since) } : {}
+  const query = options.since ? { dataAtualizacao: toOlistDateParam(options.since) } : {}
 
   for await (const page of paginateOlist<OlistContact>(orgId, '/contatos', query)) {
     if (page.length === 0) continue

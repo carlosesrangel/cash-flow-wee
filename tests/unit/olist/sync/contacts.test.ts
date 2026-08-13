@@ -55,7 +55,10 @@ describe('syncContacts', () => {
     vi.mocked(paginateOlist).mockReturnValue(fakePages([[]]) as never)
 
     const { syncContacts } = await import('@/lib/olist/sync/contacts')
-    await syncContacts(ORG_ID, { since: new Date('2026-06-01T00:00:00Z') })
+    // Midday UTC keeps the same calendar date in both UTC and America/Sao_Paulo,
+    // so this test only checks pass-through; timezone-edge correctness is
+    // covered separately in tests/unit/olist/date.test.ts.
+    await syncContacts(ORG_ID, { since: new Date('2026-06-01T12:00:00Z') })
 
     expect(paginateOlist).toHaveBeenCalledWith(
       ORG_ID,
