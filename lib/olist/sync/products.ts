@@ -1,5 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { emptyToNull } from '@/lib/olist/date'
 
 type OlistProduct = {
   id: number
@@ -36,8 +37,8 @@ export async function syncProducts(orgId: string): Promise<{ received: number; c
       tipo_variacao: product.tipoVariacao ?? null,
       precos: product.precos ?? null,
       estoque: product.estoque ?? null,
-      data_criacao_olist: product.dataCriacao ?? null,
-      data_atualizacao_olist: product.dataAlteracao ?? null,
+      data_criacao_olist: emptyToNull(product.dataCriacao),
+      data_atualizacao_olist: emptyToNull(product.dataAlteracao),
       raw: product,
       synced_at: new Date().toISOString(),
     }))

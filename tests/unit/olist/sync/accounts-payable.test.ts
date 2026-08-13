@@ -5,6 +5,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminSupabaseClient: vi.fn() }))
 
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { toOlistDateParam } from '@/lib/olist/date'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -20,15 +21,16 @@ describe('syncAccountsPayable', () => {
       fakePages([
         [
           {
-            id: 900,
-            situacao: 'aberto',
-            data: '2026-06-01',
-            dataVencimento: '2026-07-01',
-            historico: 'Aluguel Julho',
-            valor: 1500,
-            saldo: 1500,
-            numeroDocumento: 'DOC-1',
-            cliente: { id: 55 },
+            id: 40,
+            situacao: 'aberta',
+            data: '2026-01-01',
+            dataVencimento: '2026-02-01',
+            historico: 'Fatura',
+            valor: 100,
+            saldo: 100,
+            numeroDocumento: 'D1',
+            serieDocumento: 'S1',
+            cliente: { id: 5 },
           },
         ],
       ]) as never
@@ -42,12 +44,41 @@ describe('syncAccountsPayable', () => {
     const result = await syncAccountsPayable(ORG_ID)
 
     expect(result.received).toBe(1)
-    expect(upsert.mock.calls[0][0][0]).toMatchObject({
-      org_id: ORG_ID,
-      olist_id: 900,
-      situacao: 'aberto',
-      valor: 1500,
-      fornecedor_olist_id: 55,
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({ org_id: ORG_ID, olist_id: 40, fornecedor_olist_id: 5 })
+  })
+
+  it('converts empty-string data/dataVencimento to null before upserting', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(
+      fakePages([
+        [
+          {
+            id: 41,
+            situacao: 'aberta',
+            data: '',
+            dataVencimento: '',
+            historico: 'Sem datas',
+            valor: 50,
+            saldo: 50,
+            numeroDocumento: 'D2',
+            serieDocumento: 'S2',
+            cliente: null,
+          },
+        ],
+      ]) as never
+    )
+
+    const upsert = vi.fn().mockResolvedValue({ error: null })
+    const from = vi.fn().mockReturnValue({ upsert })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+
+    const { syncAccountsPayable } = await import('@/lib/olist/sync/accounts-payable')
+    await syncAccountsPayable(ORG_ID)
+
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({
+      data_emissao: null,
+      data_vencimento: null,
     })
   })
 
@@ -60,5 +91,19 @@ describe('syncAccountsPayable', () => {
     const call = vi.mocked(paginateOlist).mock.calls[0]
     expect(call[1]).toBe('/contas-pagar')
     expect(call[2]).toHaveProperty('dataInicialVencimento')
+  })
+
+  it('defaults to a 90-day window when windowDays is not provided', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(fakePages([[]]) as never)
+
+    const { syncAccountsPayable } = await import('@/lib/olist/sync/accounts-payable')
+    await syncAccountsPayable(ORG_ID)
+
+    const call = vi.mocked(paginateOlist).mock.calls[0]
+    const expectedStart = new Date()
+    expectedStart.setDate(expectedStart.getDate() - 90)
+    expect((call[2] as { dataInicialVencimento: string }).dataInicialVencimento).toBe(
+      toOlistDateParam(expectedStart)
+    )
   })
 })

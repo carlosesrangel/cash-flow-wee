@@ -24,17 +24,18 @@ describe('syncAccountsReceivable', () => {
       fakePages([
         [
           {
-            id: 700,
-            situacao: 'pago',
-            data: '2026-05-01',
-            dataVencimento: '2026-06-01',
-            historico: 'Venda #123',
-            valor: 300,
-            saldo: 0,
-            numeroDocumento: 'NF-1',
-            numeroBanco: '',
+            id: 50,
+            situacao: 'aberta',
+            data: '2026-01-01',
+            dataVencimento: '2026-02-01',
+            historico: 'Recebimento',
+            valor: 200,
+            saldo: 200,
+            numeroDocumento: 'D1',
+            numeroBanco: 'B1',
+            serieDocumento: 'S1',
             quantidadeParcelasAntecipadas: 0,
-            cliente: { id: 33 },
+            cliente: { id: 7 },
           },
         ],
       ]) as never
@@ -48,11 +49,43 @@ describe('syncAccountsReceivable', () => {
     const result = await syncAccountsReceivable(ORG_ID)
 
     expect(result.received).toBe(1)
-    expect(upsert.mock.calls[0][0][0]).toMatchObject({
-      org_id: ORG_ID,
-      olist_id: 700,
-      situacao: 'pago',
-      cliente_olist_id: 33,
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({ org_id: ORG_ID, olist_id: 50, cliente_olist_id: 7 })
+  })
+
+  it('converts empty-string data/dataVencimento to null before upserting', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(
+      fakePages([
+        [
+          {
+            id: 51,
+            situacao: 'aberta',
+            data: '',
+            dataVencimento: '',
+            historico: 'Sem datas',
+            valor: 20,
+            saldo: 20,
+            numeroDocumento: 'D2',
+            numeroBanco: 'B2',
+            serieDocumento: null,
+            quantidadeParcelasAntecipadas: 0,
+            cliente: null,
+          },
+        ],
+      ]) as never
+    )
+
+    const upsert = vi.fn().mockResolvedValue({ error: null })
+    const from = vi.fn().mockReturnValue({ upsert })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+
+    const { syncAccountsReceivable } = await import('@/lib/olist/sync/accounts-receivable')
+    await syncAccountsReceivable(ORG_ID)
+
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({
+      data_emissao: null,
+      data_vencimento: null,
     })
   })
 

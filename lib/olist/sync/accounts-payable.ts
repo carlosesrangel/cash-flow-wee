@@ -1,6 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam } from '@/lib/olist/date'
+import { toOlistDateParam, emptyToNull } from '@/lib/olist/date'
 
 type OlistAccountPayable = {
   id: number
@@ -43,8 +43,8 @@ export async function syncAccountsPayable(
       org_id: orgId,
       olist_id: account.id,
       situacao: account.situacao,
-      data_emissao: account.data,
-      data_vencimento: account.dataVencimento,
+      data_emissao: emptyToNull(account.data),
+      data_vencimento: emptyToNull(account.dataVencimento),
       historico: account.historico,
       valor: account.valor,
       saldo: account.saldo,

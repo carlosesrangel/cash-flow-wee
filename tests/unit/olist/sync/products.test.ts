@@ -20,17 +20,15 @@ describe('syncProducts', () => {
       fakePages([
         [
           {
-            id: 100,
-            sku: 'ANEL-01',
-            descricao: 'Anel Prata',
-            tipo: 'S',
+            id: 30,
+            sku: 'SKU-1',
+            descricao: 'Produto Um',
+            tipo: 'P',
             situacao: 'A',
             unidade: 'UN',
-            gtin: '',
+            gtin: null,
             dataCriacao: '2026-01-01',
-            dataAlteracao: '2026-02-01',
-            precos: { preco: 199.9 },
-            estoque: { saldo: 5 },
+            dataAlteracao: '2026-01-05',
           },
         ],
       ]) as never
@@ -44,11 +42,40 @@ describe('syncProducts', () => {
     const result = await syncProducts(ORG_ID)
 
     expect(result.received).toBe(1)
-    expect(upsert.mock.calls[0][0][0]).toMatchObject({
-      org_id: ORG_ID,
-      olist_id: 100,
-      sku: 'ANEL-01',
-      descricao: 'Anel Prata',
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({ org_id: ORG_ID, olist_id: 30, sku: 'SKU-1' })
+  })
+
+  it('converts empty-string dataCriacao/dataAlteracao to null before upserting', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(
+      fakePages([
+        [
+          {
+            id: 31,
+            sku: 'SKU-2',
+            descricao: 'Produto Sem Datas',
+            tipo: 'P',
+            situacao: 'A',
+            unidade: 'UN',
+            gtin: null,
+            dataCriacao: '',
+            dataAlteracao: '',
+          },
+        ],
+      ]) as never
+    )
+
+    const upsert = vi.fn().mockResolvedValue({ error: null })
+    const from = vi.fn().mockReturnValue({ upsert })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+
+    const { syncProducts } = await import('@/lib/olist/sync/products')
+    await syncProducts(ORG_ID)
+
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({
+      data_criacao_olist: null,
+      data_atualizacao_olist: null,
     })
   })
 })
