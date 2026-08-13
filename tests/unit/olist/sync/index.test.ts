@@ -14,6 +14,8 @@ vi.mock('@/lib/olist/sync/run-context', () => ({
 
 import { syncContacts } from '@/lib/olist/sync/contacts'
 import { syncOrders } from '@/lib/olist/sync/orders'
+import { syncAccountsPayable } from '@/lib/olist/sync/accounts-payable'
+import { syncAccountsReceivable } from '@/lib/olist/sync/accounts-receivable'
 import { startSyncRun, finishSyncRun } from '@/lib/olist/sync/run-context'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
@@ -44,6 +46,22 @@ describe('runOlistSync', () => {
       'run-1',
       expect.objectContaining({ recordsReceived: 1 + 1 + 2 + 3 + 4 + 5 + 6, recordsCreated: null, recordsUpdated: null })
     )
+  })
+
+  it('passes a large windowDays to AP/AR sync on an initial sync', async () => {
+    const { runOlistSync } = await import('@/lib/olist/sync/index')
+    await runOlistSync(ORG_ID, 'initial')
+
+    expect(syncAccountsPayable).toHaveBeenCalledWith(ORG_ID, { windowDays: 3650 })
+    expect(syncAccountsReceivable).toHaveBeenCalledWith(ORG_ID, { windowDays: 3650 })
+  })
+
+  it('passes the default (90-day) window to AP/AR sync on an incremental sync', async () => {
+    const { runOlistSync } = await import('@/lib/olist/sync/index')
+    await runOlistSync(ORG_ID, 'incremental')
+
+    expect(syncAccountsPayable).toHaveBeenCalledWith(ORG_ID, {})
+    expect(syncAccountsReceivable).toHaveBeenCalledWith(ORG_ID, {})
   })
 
   it('does not pass a since date on an initial sync', async () => {

@@ -77,3 +77,16 @@
   implementado (fora do escopo desta fase), derivar `since` a partir do
   timestamp da última sincronização bem-sucedida (mais uma margem de
   sobreposição), não de uma janela fixa.
+- **Contas a pagar/receber que "envelhecem" para fora da janela de 90 dias não
+  recebem mais refresh de status/saldo**: `syncAccountsPayable`/
+  `syncAccountsReceivable` usam uma janela deslizante de `dataVencimento`
+  (90 dias por padrão, ampliada para ~10 anos apenas no primeiro sync via
+  `mode === 'initial'` — ver `lib/olist/sync/index.ts`). Uma conta em aberto
+  cujo vencimento fica mais antigo que 90 dias nunca mais é reprocessada por
+  syncs incrementais subsequentes, então se ela for paga ou seu `saldo`
+  mudar na Olist depois desse ponto, a WEE nunca vê a atualização. Risco
+  atenuado hoje pelo fluxo real esperado (contas costumam ser regularizadas
+  antes dos 90 dias). Adiado: implementar uma passada adicional, sempre
+  completa, sobre contas com `situacao` em aberto independentemente da idade
+  do vencimento — mudança arquitetural maior, fora do escopo deste pacote de
+  correções.

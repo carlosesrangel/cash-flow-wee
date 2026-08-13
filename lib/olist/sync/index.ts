@@ -22,8 +22,13 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
     const contacts = await syncContacts(orgId, sinceOptions)
     const products = await syncProducts(orgId)
     const orders = await syncOrders(orgId, sinceOptions)
-    const accountsPayable = await syncAccountsPayable(orgId)
-    const accountsReceivable = await syncAccountsReceivable(orgId)
+    // On an initial sync, use a full-history window so a freshly connected account
+    // imports all open/closed AP/AR, not just the last 90 days by due date. Aged-out
+    // accounts (>90 days overdue, still open) may still not get status refreshes on
+    // later incremental syncs — see docs/assumptions.md, "Riscos conhecidos (Fase 2)".
+    const apArOptions = mode === 'initial' ? { windowDays: 3650 } : {}
+    const accountsPayable = await syncAccountsPayable(orgId, apArOptions)
+    const accountsReceivable = await syncAccountsReceivable(orgId, apArOptions)
 
     for (const result of [sellers, paymentMethods, contacts, products, orders, accountsPayable, accountsReceivable]) {
       received += result.received
