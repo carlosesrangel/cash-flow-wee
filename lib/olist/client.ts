@@ -6,7 +6,28 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000
 const MAX_RETRIES = 3
 const RETRY_STATUS_CODES = new Set([429, 500, 502, 503, 504])
 
-export async function getValidConnection(orgId: string): Promise<{ accessToken: string } | null> {
+// Single-flight cache: concurrent getValidConnection calls for the same org share one
+// in-flight refresh instead of each independently calling refreshTokens(). This matters
+// because Olist may rotate/invalidate the refresh token on use — two simultaneous refreshes
+// with the same stale refresh_token would otherwise cause the second call to fail with
+// invalid_grant even though the first succeeded moments earlier.
+const inFlightConnections = new Map<string, Promise<{ accessToken: string } | null>>()
+
+export function getValidConnection(orgId: string): Promise<{ accessToken: string } | null> {
+  const existing = inFlightConnections.get(orgId)
+  if (existing) {
+    return existing
+  }
+
+  const promise = fetchValidConnection(orgId).finally(() => {
+    inFlightConnections.delete(orgId)
+  })
+  inFlightConnections.set(orgId, promise)
+
+  return promise
+}
+
+async function fetchValidConnection(orgId: string): Promise<{ accessToken: string } | null> {
   const admin = createAdminSupabaseClient()
   const { data: connection } = await admin
     .from('integration_connections')
@@ -26,28 +47,38 @@ export async function getValidConnection(orgId: string): Promise<{ accessToken: 
     return { accessToken: connection.access_token as string }
   }
 
+  let tokens
   try {
-    const tokens = await refreshTokens(connection.refresh_token as string)
-    await admin
-      .from('integration_connections')
-      .update({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-        expires_at: tokens.expiresAt.toISOString(),
-        status: 'conectado',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('org_id', orgId)
-
-    return { accessToken: tokens.accessToken }
+    tokens = await refreshTokens(connection.refresh_token as string)
   } catch {
-    await admin
+    const { error } = await admin
       .from('integration_connections')
       .update({ status: 'precisa_reautorizar', updated_at: new Date().toISOString() })
       .eq('org_id', orgId)
 
+    if (error) {
+      throw new Error(`Falha ao marcar conexão Olist como precisa_reautorizar: ${error.message}`)
+    }
+
     return null
   }
+
+  const { error } = await admin
+    .from('integration_connections')
+    .update({
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      expires_at: tokens.expiresAt.toISOString(),
+      status: 'conectado',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('org_id', orgId)
+
+  if (error) {
+    throw new Error(`Falha ao persistir tokens renovados da Olist: ${error.message}`)
+  }
+
+  return { accessToken: tokens.accessToken }
 }
 
 function sleep(ms: number): Promise<void> {
