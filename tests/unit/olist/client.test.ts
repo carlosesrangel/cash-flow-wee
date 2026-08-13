@@ -208,6 +208,10 @@ describe('getValidConnection', () => {
 describe('olistFetch', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    // Reset the module cache so each test's requestTimestamps (rate-limiter state) starts
+    // empty — otherwise timestamps accumulate across tests in this file and could eventually
+    // exhaust the budget and force a real 60s+ wait instead of failing cleanly.
+    vi.resetModules()
   })
 
   it('retries once on a 5xx response then succeeds', async () => {
