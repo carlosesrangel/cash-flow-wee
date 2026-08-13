@@ -3,7 +3,7 @@ import { olistFetch } from '@/lib/olist/client'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { toOlistDateParam } from '@/lib/olist/date'
 
-type OlistOrderListItem = { id: number }
+type OlistOrderListItem = { id: number; dataCriacao?: string | null }
 
 type OlistOrderDetail = {
   id: number
@@ -72,6 +72,7 @@ export async function syncOrders(
             observacoes_internas: detail.observacoesInternas,
             cliente_olist_id: detail.cliente?.id ?? null,
             vendedor_olist_id: detail.vendedor?.id ?? null,
+            data_criacao_olist: listItem.dataCriacao ?? null,
             raw: detail,
             synced_at: new Date().toISOString(),
           },
@@ -85,7 +86,11 @@ export async function syncOrders(
 
       const orderId = upserted[0].id as string
 
-      await admin.from('olist_order_items').delete().eq('order_id', orderId)
+      const { error: deleteError } = await admin.from('olist_order_items').delete().eq('order_id', orderId)
+
+      if (deleteError) {
+        throw new Error(`Failed to delete olist_order_items for order ${detail.id}: ${deleteError.message}`)
+      }
 
       const items = detail.itens ?? []
       if (items.length > 0) {
