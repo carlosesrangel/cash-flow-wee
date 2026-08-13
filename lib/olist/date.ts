@@ -21,3 +21,13 @@ export function toOlistDateParam(date: Date): string {
   const lookup = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
   return `${lookup('year')}-${lookup('month')}-${lookup('day')}`
 }
+
+/**
+ * The Olist API returns "" (rather than omitting the key or returning null)
+ * for unset date/timestamptz fields on some records, which Postgres rejects
+ * as an invalid date/timestamptz literal. Normalize those to null before
+ * upserting into any date/timestamptz-typed column.
+ */
+export function emptyToNull(value: string | null | undefined): string | null {
+  return value ? value : null
+}

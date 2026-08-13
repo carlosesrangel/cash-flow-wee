@@ -1,14 +1,7 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { olistFetch } from '@/lib/olist/client'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam } from '@/lib/olist/date'
-
-// The Olist API returns "" (rather than omitting the key or returning null)
-// for unset date/timestamptz fields, which Postgres rejects as an invalid
-// date/timestamptz literal. Normalize those to null before upserting.
-function emptyToNull(value: string | null | undefined): string | null {
-  return value ? value : null
-}
+import { toOlistDateParam, emptyToNull } from '@/lib/olist/date'
 
 type OlistOrderListItem = { id: number; dataCriacao?: string | null }
 

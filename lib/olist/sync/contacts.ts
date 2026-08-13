@@ -1,6 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam } from '@/lib/olist/date'
+import { toOlistDateParam, emptyToNull } from '@/lib/olist/date'
 
 type OlistContact = {
   id: number
@@ -50,8 +50,8 @@ export async function syncContacts(
       vendedor_olist_id: contact.vendedor?.id ?? null,
       situacao: contact.situacao ?? null,
       status_crm: contact.statusCrm ?? null,
-      data_criacao_olist: contact.dataCriacao ?? null,
-      data_atualizacao_olist: contact.dataAtualizacao ?? null,
+      data_criacao_olist: emptyToNull(contact.dataCriacao),
+      data_atualizacao_olist: emptyToNull(contact.dataAtualizacao),
       raw: contact,
       synced_at: new Date().toISOString(),
     }))

@@ -51,6 +51,35 @@ describe('syncContacts', () => {
     expect(upsertedRows[1]).toMatchObject({ org_id: ORG_ID, olist_id: 11, vendedor_olist_id: null })
   })
 
+  it('converts empty-string dataCriacao/dataAtualizacao to null before upserting', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(
+      fakePages([
+        [
+          {
+            id: 20,
+            nome: 'Cliente Sem Datas',
+            situacao: 'A',
+            dataCriacao: '',
+            dataAtualizacao: '',
+          },
+        ],
+      ]) as never
+    )
+
+    const upsert = vi.fn().mockResolvedValue({ error: null })
+    const from = vi.fn().mockReturnValue({ upsert })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+
+    const { syncContacts } = await import('@/lib/olist/sync/contacts')
+    await syncContacts(ORG_ID)
+
+    const upsertedRows = upsert.mock.calls[0][0]
+    expect(upsertedRows[0]).toMatchObject({
+      data_criacao_olist: null,
+      data_atualizacao_olist: null,
+    })
+  })
+
   it('passes dataAtualizacao to paginateOlist when since is provided', async () => {
     vi.mocked(paginateOlist).mockReturnValue(fakePages([[]]) as never)
 
