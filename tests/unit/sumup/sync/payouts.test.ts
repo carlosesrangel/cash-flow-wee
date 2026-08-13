@@ -79,4 +79,33 @@ describe('syncSumupPayouts', () => {
       expect.objectContaining({ start_date: toLocalDateParam(windowStart) })
     )
   })
+
+  it('throws instead of silently truncating when the response length equals the requested limit', async () => {
+    const limit = 9999
+    const payouts = Array.from({ length: limit }, (_, i) => ({
+      id: i,
+      type: 'PAYOUT',
+      amount: 10,
+      date: '2026-06-01',
+      currency: 'BRL',
+      status: 'SUCCESSFUL',
+    }))
+    vi.mocked(sumupFetch).mockResolvedValue(payouts)
+
+    const { syncSumupPayouts } = await import('@/lib/sumup/sync/payouts')
+
+    await expect(syncSumupPayouts(ORG_ID)).rejects.toThrow(/may be truncated/i)
+  })
+
+  it('requests the documented maximum limit of 9999', async () => {
+    vi.mocked(sumupFetch).mockResolvedValue([])
+
+    const { syncSumupPayouts } = await import('@/lib/sumup/sync/payouts')
+    await syncSumupPayouts(ORG_ID)
+
+    expect(sumupFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ limit: 9999 })
+    )
+  })
 })

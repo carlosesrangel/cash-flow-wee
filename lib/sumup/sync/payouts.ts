@@ -25,11 +25,23 @@ export async function syncSumupPayouts(
   const windowStart = new Date()
   windowStart.setDate(windowStart.getDate() - windowDays)
 
+  // SumUp's payouts endpoint returns a bare JSON array with no pagination
+  // metadata (no Link header, no total-count header, nothing). 9999 is the
+  // documented maximum `limit`. If we ever get back exactly `limit` results,
+  // we cannot tell whether that's the true count or a silent truncation, so
+  // we fail loudly instead of reporting an incomplete sync as successful.
+  const limit = 9999
   const payouts = await sumupFetch<SumupPayout[]>(`/v1.0/merchants/${merchantCode}/payouts`, {
     start_date: toLocalDateParam(windowStart),
     end_date: toLocalDateParam(new Date()),
-    limit: 1000,
+    limit,
   })
+
+  if (payouts.length === limit) {
+    throw new Error(
+      `Payout sync may be truncated: received exactly the requested limit (${limit}) of payouts for the ${windowDays}-day window — narrow the window or implement real pagination`
+    )
+  }
 
   if (payouts.length === 0) {
     return { received: 0 }
