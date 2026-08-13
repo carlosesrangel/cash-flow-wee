@@ -6,11 +6,14 @@ import { sumupFetch } from '@/lib/sumup/client'
 describe('paginateSumupTransactions', () => {
   afterEach(() => vi.clearAllMocks())
 
-  it('follows the next link across pages until none remains', async () => {
+  it('follows the next link across pages until none remains, parsing the real bare-query-string href shape', async () => {
+    // Real confirmed shape from the live SumUp API: the `next` link's href is
+    // a bare query string with no leading slash, path, or scheme — e.g.
+    // "limit=1&merchant_code=MC3QQU9T&oldest_ref=...&order=ascending&skip_tx_result=true"
     vi.mocked(sumupFetch)
       .mockResolvedValueOnce({
         items: [{ transaction_code: 'A' }, { transaction_code: 'B' }],
-        links: [{ rel: 'next', href: '/v2.1/merchants/MC-TEST/transactions/history?limit=2&oldest_ref=B' }],
+        links: [{ rel: 'next', href: 'limit=2&merchant_code=MC-TEST&oldest_ref=B&order=ascending&skip_tx_result=true' }],
       })
       .mockResolvedValueOnce({
         items: [{ transaction_code: 'C' }],
@@ -35,8 +38,14 @@ describe('paginateSumupTransactions', () => {
     )
     expect(sumupFetch).toHaveBeenNthCalledWith(
       2,
-      '/v2.1/merchants/MC-TEST/transactions/history?limit=2&oldest_ref=B',
-      undefined
+      '/v2.1/merchants/MC-TEST/transactions/history',
+      {
+        limit: '2',
+        merchant_code: 'MC-TEST',
+        oldest_ref: 'B',
+        order: 'ascending',
+        skip_tx_result: 'true',
+      }
     )
   })
 
@@ -56,7 +65,7 @@ describe('paginateSumupTransactions', () => {
   it('stops when a page comes back empty even if a next link is somehow present', async () => {
     vi.mocked(sumupFetch).mockResolvedValueOnce({
       items: [],
-      links: [{ rel: 'next', href: '/v2.1/merchants/MC-TEST/transactions/history?limit=100' }],
+      links: [{ rel: 'next', href: 'limit=100' }],
     })
 
     const { paginateSumupTransactions } = await import('@/lib/sumup/paginate')
