@@ -233,6 +233,62 @@ describe('olistFetch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('honors a numeric Retry-After header on a 429 instead of blind exponential backoff', async () => {
+    const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const adminMock = makeAdminMock({
+      access_token: 'valid-token',
+      refresh_token: 'refresh-token',
+      expires_at: futureExpiry,
+      status: 'conectado',
+    })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never)
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => 'rate limited',
+        headers: new Headers({ 'Retry-After': '2' }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+    const { olistFetch } = await import('@/lib/olist/client')
+    const result = await olistFetch<{ ok: boolean }>(ORG_ID, '/contatos', {})
+
+    expect(result).toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2000)
+  })
+
+  it('falls back to blind exponential backoff on a 429 with no Retry-After header', async () => {
+    const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const adminMock = makeAdminMock({
+      access_token: 'valid-token',
+      refresh_token: 'refresh-token',
+      expires_at: futureExpiry,
+      status: 'conectado',
+    })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never)
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'rate limited', headers: new Headers() })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+    const { olistFetch } = await import('@/lib/olist/client')
+    const result = await olistFetch<{ ok: boolean }>(ORG_ID, '/contatos', {})
+
+    expect(result).toEqual({ ok: true })
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 500)
+  })
+
   it('throws after exhausting retries', async () => {
     const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
     const adminMock = makeAdminMock({

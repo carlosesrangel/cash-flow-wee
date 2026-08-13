@@ -88,6 +88,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Parses a `Retry-After` header value. Per RFC 9110 it's either a number of seconds
+// or an HTTP-date; only the (far more common, and the only one Olist is known to
+// send) numeric-seconds form is handled — an HTTP-date or anything unparseable falls
+// back to blind exponential backoff.
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null
+  const seconds = Number(header)
+  if (!Number.isFinite(seconds) || seconds < 0) return null
+  return seconds * 1000
+}
+
 export async function olistFetch<T>(
   orgId: string,
   path: string,
@@ -121,7 +132,8 @@ export async function olistFetch<T>(
       throw lastError
     }
 
-    await sleep(2 ** attempt * 500)
+    const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response.headers.get('Retry-After')) : null
+    await sleep(retryAfterMs ?? 2 ** attempt * 500)
   }
 
   throw lastError ?? new Error(`Olist API request failed for ${path}`)
