@@ -24,7 +24,7 @@ type OlistContact = {
 export async function syncContacts(
   orgId: string,
   options: { since?: Date } = {}
-): Promise<{ received: number; created: number; updated: number }> {
+): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -60,5 +60,5 @@ export async function syncContacts(
     if (error) throw new Error(`Failed to upsert olist_contacts: ${error.message}`)
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }

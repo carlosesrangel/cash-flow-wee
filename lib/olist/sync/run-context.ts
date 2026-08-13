@@ -3,8 +3,11 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 export type SyncRunResult = {
   status: 'success' | 'failed'
   recordsReceived: number
-  recordsCreated: number
-  recordsUpdated: number
+  // The sync functions upsert in bulk and never actually measured how many
+  // rows were newly inserted vs. updated, so these are `null` ("not
+  // measured") rather than a fabricated count equal to recordsReceived.
+  recordsCreated: number | null
+  recordsUpdated: number | null
   errorCount: number
   errorMessage?: string
 }

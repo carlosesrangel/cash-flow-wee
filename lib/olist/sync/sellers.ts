@@ -8,7 +8,7 @@ type OlistSeller = {
   contato?: { id: number } | null
 }
 
-export async function syncSellers(orgId: string): Promise<{ received: number; created: number; updated: number }> {
+export async function syncSellers(orgId: string): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -30,5 +30,5 @@ export async function syncSellers(orgId: string): Promise<{ received: number; cr
     if (error) throw new Error(`Failed to upsert olist_sellers: ${error.message}`)
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }

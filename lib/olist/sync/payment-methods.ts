@@ -9,7 +9,7 @@ type OlistPaymentMethod = {
 
 export async function syncPaymentMethods(
   orgId: string
-): Promise<{ received: number; created: number; updated: number }> {
+): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -30,5 +30,5 @@ export async function syncPaymentMethods(
     if (error) throw new Error(`Failed to upsert olist_payment_methods: ${error.message}`)
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }

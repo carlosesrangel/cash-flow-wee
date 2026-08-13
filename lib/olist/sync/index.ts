@@ -14,8 +14,6 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
   const sinceOptions = since ? { since } : {}
 
   let received = 0
-  let created = 0
-  let updated = 0
 
   try {
     // Reference data first — orders/AP/AR store references to these by olist_id.
@@ -29,23 +27,21 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
 
     for (const result of [sellers, paymentMethods, contacts, products, orders, accountsPayable, accountsReceivable]) {
       received += result.received
-      created += result.created
-      updated += result.updated
     }
 
     await finishSyncRun(runId, {
       status: 'success',
       recordsReceived: received,
-      recordsCreated: created,
-      recordsUpdated: updated,
+      recordsCreated: null,
+      recordsUpdated: null,
       errorCount: 0,
     })
   } catch (error) {
     await finishSyncRun(runId, {
       status: 'failed',
       recordsReceived: received,
-      recordsCreated: created,
-      recordsUpdated: updated,
+      recordsCreated: null,
+      recordsUpdated: null,
       errorCount: 1,
       errorMessage: error instanceof Error ? error.message : String(error),
     })

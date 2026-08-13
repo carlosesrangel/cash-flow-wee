@@ -36,7 +36,7 @@ type OlistOrderDetail = {
 export async function syncOrders(
   orgId: string,
   options: { since?: Date } = {}
-): Promise<{ received: number; created: number; updated: number }> {
+): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -116,5 +116,5 @@ export async function syncOrders(
     }
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }

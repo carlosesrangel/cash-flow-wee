@@ -25,7 +25,7 @@ type OlistAccountPayable = {
 export async function syncAccountsPayable(
   orgId: string,
   options: { windowDays?: number } = {}
-): Promise<{ received: number; created: number; updated: number }> {
+): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -59,5 +59,5 @@ export async function syncAccountsPayable(
     if (error) throw new Error(`Failed to upsert olist_accounts_payable: ${error.message}`)
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }

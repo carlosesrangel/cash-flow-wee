@@ -17,7 +17,7 @@ type OlistProduct = {
   estoque?: unknown
 }
 
-export async function syncProducts(orgId: string): Promise<{ received: number; created: number; updated: number }> {
+export async function syncProducts(orgId: string): Promise<{ received: number }> {
   const admin = createAdminSupabaseClient()
   let received = 0
 
@@ -47,5 +47,5 @@ export async function syncProducts(orgId: string): Promise<{ received: number; c
     if (error) throw new Error(`Failed to upsert olist_products: ${error.message}`)
   }
 
-  return { received, created: received, updated: 0 }
+  return { received }
 }
