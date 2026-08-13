@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminSupabaseClient: vi.fn() }))
 
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam } from '@/lib/olist/date'
+import { toLocalDateParam } from '@/lib/integrations/date'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -103,7 +103,7 @@ describe('syncAccountsPayable', () => {
     const expectedStart = new Date()
     expectedStart.setDate(expectedStart.getDate() - 90)
     expect((call[2] as { dataInicialVencimento: string }).dataInicialVencimento).toBe(
-      toOlistDateParam(expectedStart)
+      toLocalDateParam(expectedStart)
     )
   })
 })

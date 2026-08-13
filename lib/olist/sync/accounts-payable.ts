@@ -1,6 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam, emptyToNull } from '@/lib/olist/date'
+import { toLocalDateParam, emptyToNull } from '@/lib/integrations/date'
 
 type OlistAccountPayable = {
   id: number
@@ -33,7 +33,7 @@ export async function syncAccountsPayable(
   const windowStart = new Date()
   windowStart.setDate(windowStart.getDate() - windowDays)
 
-  const query = { dataInicialVencimento: toOlistDateParam(windowStart) }
+  const query = { dataInicialVencimento: toLocalDateParam(windowStart) }
 
   for await (const page of paginateOlist<OlistAccountPayable>(orgId, '/contas-pagar', query)) {
     if (page.length === 0) continue

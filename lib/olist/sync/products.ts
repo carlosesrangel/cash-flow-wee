@@ -1,6 +1,6 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { emptyToNull } from '@/lib/olist/date'
+import { emptyToNull } from '@/lib/integrations/date'
 
 type OlistProduct = {
   id: number

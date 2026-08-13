@@ -1,7 +1,7 @@
 import { paginateOlist } from '@/lib/olist/paginate'
 import { olistFetch } from '@/lib/olist/client'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toOlistDateParam, emptyToNull } from '@/lib/olist/date'
+import { toLocalDateParam, emptyToNull } from '@/lib/integrations/date'
 
 type OlistOrderListItem = { id: number; dataCriacao?: string | null }
 
@@ -40,7 +40,7 @@ export async function syncOrders(
   const admin = createAdminSupabaseClient()
   let received = 0
 
-  const query = options.since ? { dataAtualizacao: toOlistDateParam(options.since) } : {}
+  const query = options.since ? { dataAtualizacao: toLocalDateParam(options.since) } : {}
 
   for await (const page of paginateOlist<OlistOrderListItem>(orgId, '/pedidos', query)) {
     for (const listItem of page) {
