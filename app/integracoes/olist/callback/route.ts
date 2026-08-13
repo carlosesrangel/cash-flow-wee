@@ -22,8 +22,6 @@ export async function GET(request: Request) {
       {
         org_id: state.orgId,
         provider: 'olist',
-        client_id: process.env.OLIST_CLIENT_ID,
-        client_secret: process.env.OLIST_CLIENT_SECRET,
         access_token: tokens.accessToken,
         refresh_token: tokens.refreshToken,
         expires_at: tokens.expiresAt.toISOString(),
@@ -35,7 +33,8 @@ export async function GET(request: Request) {
     )
 
     if (error) throw error
-  } catch {
+  } catch (err) {
+    console.error('Olist OAuth callback failed:', err)
     return NextResponse.redirect(`${origin}/integracoes?olist_erro=falha_conexao`)
   }
 
