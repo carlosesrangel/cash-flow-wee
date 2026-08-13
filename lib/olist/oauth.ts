@@ -1,3 +1,4 @@
+import 'server-only'
 import { signState } from '@/lib/olist/state'
 
 const AUTHORIZE_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth'
