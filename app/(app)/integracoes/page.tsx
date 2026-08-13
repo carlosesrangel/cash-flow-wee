@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getCurrentMember } from '@/lib/auth/session'
+import { canManageIntegrations } from '@/lib/auth/rbac'
 import { getOlistConnectionStatus } from '@/lib/olist/status'
 import { OlistCard } from '@/components/integrations/olist-card'
 import { formatDateBR } from '@/lib/format/date'
@@ -24,7 +25,11 @@ export default async function IntegracoesPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Saúde das Integrações</h1>
       <div className="grid gap-4 sm:grid-cols-2">
-        <OlistCard status={olistStatus.status} connectedAt={olistStatus.connectedAt} />
+        <OlistCard
+          status={olistStatus.status}
+          connectedAt={olistStatus.connectedAt}
+          canManage={Boolean(member && canManageIntegrations(member.role))}
+        />
         <div className="rounded-lg border bg-white p-4">
           <h2 className="font-medium">SumUp</h2>
           {lastSumupRun ? (

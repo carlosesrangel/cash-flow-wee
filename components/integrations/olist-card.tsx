@@ -7,6 +7,7 @@ import { formatDateBR } from '@/lib/format/date'
 type Props = {
   status: 'desconectado' | 'conectado' | 'precisa_reautorizar'
   connectedAt: string | null
+  canManage: boolean
 }
 
 const STATUS_LABEL: Record<Props['status'], string> = {
@@ -15,7 +16,7 @@ const STATUS_LABEL: Record<Props['status'], string> = {
   precisa_reautorizar: 'Precisa reautorizar',
 }
 
-export function OlistCard({ status, connectedAt }: Props) {
+export function OlistCard({ status, connectedAt, canManage }: Props) {
   const router = useRouter()
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -47,24 +48,30 @@ export function OlistCard({ status, connectedAt }: Props) {
         Status: {STATUS_LABEL[status]}
         {connectedAt && status === 'conectado' && ` — conectado em ${formatDateBR(connectedAt)}`}
       </p>
-      <div className="mt-3 flex gap-2">
-        {needsConnect ? (
-          <a
-            href="/api/integracoes/olist/connect"
-            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            {status === 'precisa_reautorizar' ? 'Reconectar' : 'Conectar'}
-          </a>
-        ) : (
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {syncing ? 'Sincronizando...' : 'Sincronizar agora'}
-          </button>
-        )}
-      </div>
+      {canManage ? (
+        <div className="mt-3 flex gap-2">
+          {needsConnect ? (
+            <a
+              href="/api/integracoes/olist/connect"
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              {status === 'precisa_reautorizar' ? 'Reconectar' : 'Conectar'}
+            </a>
+          ) : (
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {syncing ? 'Sincronizando...' : 'Sincronizar agora'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-neutral-500">
+          Apenas administradores podem gerenciar esta integração.
+        </p>
+      )}
       {syncError && <p className="mt-2 text-sm text-red-600">{syncError}</p>}
     </div>
   )
