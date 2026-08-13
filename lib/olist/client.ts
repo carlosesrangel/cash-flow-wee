@@ -7,6 +7,33 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000
 const MAX_RETRIES = 3
 const RETRY_STATUS_CODES = new Set([429, 500, 502, 503, 504])
 
+// Tiny/Olist enforces a request-per-minute quota by plan (documented at
+// ajuda.olist.com/hubs-e-plataformas-via-api/aplicativos-api-v3-configuracoes-e-utilizacao):
+// 30/min on the "Crescer" plan WEE is on. The quota is per Tiny *account*, shared across every
+// app connected to it — not per application — so staying under it here doesn't guarantee a 429
+// never happens (another app on the same account can still consume the shared budget), but it
+// stops *us* from being the cause. No rate-limit response headers or Retry-After are documented,
+// so this is a client-side pre-emptive throttle rather than a reactive one. Configurable via
+// OLIST_RATE_LIMIT_PER_MINUTE in case the plan changes; the default leaves headroom below the
+// documented ceiling for other apps sharing the account.
+const RATE_LIMIT_PER_MINUTE = Number(process.env.OLIST_RATE_LIMIT_PER_MINUTE) || 25
+const RATE_LIMIT_WINDOW_MS = 60_000
+const requestTimestamps: number[] = []
+
+async function waitForRateLimitSlot(): Promise<void> {
+  for (;;) {
+    const now = Date.now()
+    while (requestTimestamps.length > 0 && now - requestTimestamps[0] >= RATE_LIMIT_WINDOW_MS) {
+      requestTimestamps.shift()
+    }
+    if (requestTimestamps.length < RATE_LIMIT_PER_MINUTE) {
+      requestTimestamps.push(now)
+      return
+    }
+    await sleep(RATE_LIMIT_WINDOW_MS - (now - requestTimestamps[0]) + 10)
+  }
+}
+
 // Single-flight cache: concurrent getValidConnection calls for the same org share one
 // in-flight refresh instead of each independently calling refreshTokens(). This matters
 // because Olist may rotate/invalidate the refresh token on use — two simultaneous refreshes
@@ -117,6 +144,8 @@ export async function olistFetch<T>(
   let lastError: Error | null = null
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    await waitForRateLimitSlot()
+
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${connection.accessToken}` },
     })
@@ -132,8 +161,15 @@ export async function olistFetch<T>(
       throw lastError
     }
 
-    const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response.headers.get('Retry-After')) : null
-    await sleep(retryAfterMs ?? 2 ** attempt * 500)
+    if (response.status === 429) {
+      // No Retry-After is documented for this API, and empirically a short exponential
+      // backoff isn't enough against a per-minute quota (still lands in the same throttled
+      // window) — wait a full window unless the response tells us otherwise.
+      const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'))
+      await sleep(retryAfterMs ?? RATE_LIMIT_WINDOW_MS)
+    } else {
+      await sleep(2 ** attempt * 500)
+    }
   }
 
   throw lastError ?? new Error(`Olist API request failed for ${path}`)

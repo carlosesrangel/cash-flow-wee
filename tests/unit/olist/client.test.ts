@@ -264,7 +264,10 @@ describe('olistFetch', () => {
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2000)
   })
 
-  it('falls back to blind exponential backoff on a 429 with no Retry-After header', async () => {
+  it('waits a full rate-limit window on a 429 with no Retry-After header', async () => {
+    // A short exponential backoff isn't enough against a per-minute quota — it still lands
+    // in the same throttled window (this is exactly what happened against the real API).
+    // With no Retry-After to go by, wait a full window (60s) instead.
     const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
     const adminMock = makeAdminMock({
       access_token: 'valid-token',
@@ -280,6 +283,38 @@ describe('olistFetch', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
     vi.stubGlobal('fetch', fetchMock)
 
+    // Fires the callback immediately instead of actually waiting 60s of real time —
+    // this test only needs to prove the correct delay was requested, not experience it.
+    const setTimeoutSpy = vi
+      .spyOn(globalThis, 'setTimeout')
+      .mockImplementation(((fn: () => void) => {
+        fn()
+        return 0 as unknown as ReturnType<typeof setTimeout>
+      }) as typeof setTimeout)
+
+    const { olistFetch } = await import('@/lib/olist/client')
+    const result = await olistFetch<{ ok: boolean }>(ORG_ID, '/contatos', {})
+
+    expect(result).toEqual({ ok: true })
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000)
+  })
+
+  it('still uses exponential backoff for non-429 retryable statuses', async () => {
+    const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const adminMock = makeAdminMock({
+      access_token: 'valid-token',
+      refresh_token: 'refresh-token',
+      expires_at: futureExpiry,
+      status: 'conectado',
+    })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never)
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 502, text: async () => 'bad gateway' })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
 
     const { olistFetch } = await import('@/lib/olist/client')
@@ -287,6 +322,56 @@ describe('olistFetch', () => {
 
     expect(result).toEqual({ ok: true })
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 500)
+  })
+
+  it('self-throttles to stay under the requests-per-minute budget', async () => {
+    // Fake timers here (not the immediate-fire setTimeout mock used above): the limiter's
+    // wait loop re-reads Date.now() on each pass, so a mock that resolves sleep() instantly
+    // without advancing the clock makes it spin forever recomputing the same "still not
+    // enough time passed" result. Fake timers advance Date consistently with the clock,
+    // so the loop naturally exits once enough (virtual) time has elapsed.
+    vi.resetModules()
+    vi.useFakeTimers()
+    try {
+      const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const adminMock = makeAdminMock({
+        access_token: 'valid-token',
+        refresh_token: 'refresh-token',
+        expires_at: futureExpiry,
+        status: 'conectado',
+      })
+      vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never)
+
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      process.env.OLIST_RATE_LIMIT_PER_MINUTE = '3'
+      const { olistFetch } = await import('@/lib/olist/client')
+
+      // First 3 calls consume the whole budget and must not wait.
+      await olistFetch(ORG_ID, '/contatos', {})
+      await olistFetch(ORG_ID, '/contatos', {})
+      await olistFetch(ORG_ID, '/contatos', {})
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+
+      // The 4th call is over budget — it must wait for the oldest slot to age out of the 60s
+      // window before firing (a small buffer is added on top, see waitForRateLimitSlot).
+      const fourthCall = olistFetch(ORG_ID, '/contatos', {})
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(61_000)
+      await fourthCall
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    } finally {
+      delete process.env.OLIST_RATE_LIMIT_PER_MINUTE
+      vi.useRealTimers()
+      // The cached module instance has RATE_LIMIT_PER_MINUTE=3 baked in, and its
+      // requestTimestamps entries were recorded on the fake clock — comparing them against
+      // real Date.now() afterward could read as "in the future" and never age out. Reset so
+      // later tests import a clean module under the default limit and real time.
+      vi.resetModules()
+    }
   })
 
   it('throws after exhausting retries', async () => {
