@@ -77,6 +77,54 @@ describe('syncOrders', () => {
     ])
   })
 
+  it('converts empty-string date fields to null before upserting', async () => {
+    vi.mocked(paginateOlist).mockReturnValue(fakePages([[{ id: 500, dataCriacao: '' }]]) as never)
+    vi.mocked(olistFetch).mockResolvedValue({
+      id: 500,
+      numeroPedido: 1001,
+      situacao: 1,
+      origemPedido: 0,
+      data: '2026-06-01',
+      dataPrevista: '',
+      dataEntrega: '',
+      dataFaturamento: '',
+      valorTotalPedido: 250.5,
+      valorTotalProdutos: 250.5,
+      cliente: { id: 77 },
+      vendedor: { id: 1 },
+      itens: [],
+    })
+
+    const orderSelect = vi.fn().mockResolvedValue({ data: [{ id: 'internal-order-uuid' }], error: null })
+    const orderUpsert = vi.fn().mockReturnValue({ select: orderSelect })
+    const itemsDelete = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+    const itemsInsert = vi.fn().mockResolvedValue({ error: null })
+
+    const from = vi.fn((table: string) => {
+      if (table === 'olist_orders') {
+        return { upsert: orderUpsert }
+      }
+      if (table === 'olist_order_items') {
+        return { delete: itemsDelete, insert: itemsInsert }
+      }
+      throw new Error(`unexpected table ${table}`)
+    })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+
+    const { syncOrders } = await import('@/lib/olist/sync/orders')
+    await syncOrders(ORG_ID)
+
+    expect(orderUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data_prevista: null,
+        data_entrega: null,
+        data_faturamento: null,
+        data_criacao_olist: null,
+      }),
+      expect.anything()
+    )
+  })
+
   it('throws and skips the insert when deleting existing order items fails', async () => {
     vi.mocked(paginateOlist).mockReturnValue(fakePages([[{ id: 500 }]]) as never)
     vi.mocked(olistFetch).mockResolvedValue({

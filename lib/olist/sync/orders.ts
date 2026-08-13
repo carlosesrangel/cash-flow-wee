@@ -3,6 +3,13 @@ import { olistFetch } from '@/lib/olist/client'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { toOlistDateParam } from '@/lib/olist/date'
 
+// The Olist API returns "" (rather than omitting the key or returning null)
+// for unset date/timestamptz fields, which Postgres rejects as an invalid
+// date/timestamptz literal. Normalize those to null before upserting.
+function emptyToNull(value: string | null | undefined): string | null {
+  return value ? value : null
+}
+
 type OlistOrderListItem = { id: number; dataCriacao?: string | null }
 
 type OlistOrderDetail = {
@@ -57,10 +64,10 @@ export async function syncOrders(
             numero_pedido: detail.numeroPedido,
             situacao: detail.situacao,
             origem_pedido: detail.origemPedido,
-            data: detail.data,
-            data_prevista: detail.dataPrevista,
-            data_entrega: detail.dataEntrega,
-            data_faturamento: detail.dataFaturamento,
+            data: emptyToNull(detail.data),
+            data_prevista: emptyToNull(detail.dataPrevista),
+            data_entrega: emptyToNull(detail.dataEntrega),
+            data_faturamento: emptyToNull(detail.dataFaturamento),
             id_nota_fiscal: detail.idNotaFiscal,
             valor_total_produtos: detail.valorTotalProdutos,
             valor_total_pedido: detail.valorTotalPedido,
@@ -72,7 +79,7 @@ export async function syncOrders(
             observacoes_internas: detail.observacoesInternas,
             cliente_olist_id: detail.cliente?.id ?? null,
             vendedor_olist_id: detail.vendedor?.id ?? null,
-            data_criacao_olist: listItem.dataCriacao ?? null,
+            data_criacao_olist: emptyToNull(listItem.dataCriacao),
             raw: detail,
             synced_at: new Date().toISOString(),
           },
