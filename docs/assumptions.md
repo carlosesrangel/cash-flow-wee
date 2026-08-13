@@ -37,3 +37,69 @@
   multi-organização for adicionado no futuro, um seletor explícito de
   organização ativa precisa ser construído antes que o comportamento dessa
   função seja correto para usuários com múltiplas memberships.
+
+
+## Riscos conhecidos (Fase 2 — Integração Olist)
+
+- **`state` do OAuth2 não tem nonce/expiração/vínculo à sessão**: `lib/olist/state.ts`
+  assina `{ orgId }` via HMAC, provando apenas que o valor foi gerado pelo
+  nosso fluxo — não que foi *esta* pessoa, *agora*, que iniciou a conexão.
+  Uma URL de autorização válida exposta via histórico do navegador, logs ou
+  ferramentas de suporte poderia, em teoria, ser reaproveitada por outro
+  usuário autenticado no mesmo app para conectar sua própria conta Olist à
+  organização alvo. Risco atenuado hoje porque: só `OWNER_ADMIN` pode iniciar
+  a conexão (RBAC via `canManageIntegrations`), e a WEE é uma ferramenta
+  interna de poucos usuários, não um SaaS público. Adiado: antes de expor
+  este fluxo a mais usuários ou a um ambiente com maior superfície de ataque,
+  adicionar um nonce aleatório de uso único com expiração curta, vinculado à
+  sessão de quem iniciou o fluxo, validado atomicamente no callback.
+- **Trava de refresh concorrente (`lib/olist/client.ts`) só protege dentro de
+  um processo Node**: o cache em memória que evita chamadas de refresh
+  duplicadas para o mesmo `orgId` não coordena entre múltiplas instâncias
+  serverless rodando em paralelo (ex.: Vercel com várias funções ativas ao
+  mesmo tempo). Hoje isso não é um problema real porque a aplicação roda
+  localmente, sem deploy serverless. Adiado: antes do deploy real em um
+  ambiente com múltiplas instâncias, trocar por uma coordenação a nível de
+  banco (ex.: update condicional comparando o `refresh_token` já lido, ou um
+  lease/lock por org+provider) para evitar que duas instâncias renovem o
+  mesmo token simultaneamente e uma delas marque a conexão como
+  `precisa_reautorizar` por engano ao receber `invalid_grant` para um token
+  já rotacionado por outra instância.
+- **Modo `incremental` usa uma janela fixa de 24h, não "desde a última
+  sincronização bem-sucedida"**: `lib/olist/sync/index.ts` deriva
+  `since = agora - 24h` para todo sync incremental. Se ninguém sincronizar
+  por mais de 24h (o que é esperado nesta fase, já que não há agendamento
+  automático), contatos/pedidos atualizados nesse intervalo maior podem ser
+  silenciosamente ignorados até a próxima atualização deles. O caso de
+  primeira sincronização (conta recém-conectada) já foi corrigido — o sync
+  agora detecta a ausência de um `sync_runs` bem-sucedido anterior e roda em
+  modo `initial` completo. Adiado: quando o agendamento automático for
+  implementado (fora do escopo desta fase), derivar `since` a partir do
+  timestamp da última sincronização bem-sucedida (mais uma margem de
+  sobreposição), não de uma janela fixa.
+- **Contas a pagar/receber que "envelhecem" para fora da janela de 90 dias não
+  recebem mais refresh de status/saldo**: `syncAccountsPayable`/
+  `syncAccountsReceivable` usam uma janela deslizante de `dataVencimento`
+  (90 dias por padrão, ampliada para ~10 anos apenas no primeiro sync via
+  `mode === 'initial'` — ver `lib/olist/sync/index.ts`). Uma conta em aberto
+  cujo vencimento fica mais antigo que 90 dias nunca mais é reprocessada por
+  syncs incrementais subsequentes, então se ela for paga ou seu `saldo`
+  mudar na Olist depois desse ponto, a WEE nunca vê a atualização. Risco
+  atenuado hoje pelo fluxo real esperado (contas costumam ser regularizadas
+  antes dos 90 dias). Adiado: implementar uma passada adicional, sempre
+  completa, sobre contas com `situacao` em aberto independentemente da idade
+  do vencimento — mudança arquitetural maior, fora do escopo deste pacote de
+  correções.
+- **Janela de detecção de sincronização ativa (10 min) pode ser menor que uma
+  sincronização `initial` real**: `app/api/integracoes/olist/sync/route.ts`
+  bloqueia uma segunda sincronização se já existe uma rodando há menos de 10
+  minutos (proteção contra duplicação de `olist_order_items` por corridas
+  concorrentes). Como a sincronização `initial` agora busca ~10 anos de
+  histórico de contas a pagar/receber, mais uma chamada por pedido (com
+  possível backoff por rate limit), uma primeira sincronização real pode
+  demorar mais que 10 minutos — nesse caso, uma segunda requisição não seria
+  mais bloqueada, reabrindo a janela de corrida que a proteção existe para
+  fechar. Adiado: aumentar o corte de obsolescência (ou derivá-lo de um
+  heartbeat em vez de um valor fixo) quando o volume real de dados justificar
+  o ajuste — não implementado agora para não adicionar complexidade sem medir
+  o tempo real de uma sincronização inicial completa primeiro.

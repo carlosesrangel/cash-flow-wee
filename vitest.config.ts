@@ -12,6 +12,14 @@ export default defineConfig({
     exclude: ['**/node_modules/**', 'tests/unit/rls/**'],
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, '.') },
+    alias: {
+      '@': path.resolve(__dirname, '.'),
+      // The real `server-only` package throws unconditionally when imported outside of
+      // Next.js's webpack build (it relies on webpack's server/client module graph to
+      // suppress the throw on the server). Alias it to a no-op so unit tests — which run
+      // under plain Node/Vitest, not Next's bundler — can still import modules that guard
+      // against accidental client-side imports with `import 'server-only'`.
+      'server-only': path.resolve(__dirname, 'tests/unit/__mocks__/server-only.ts'),
+    },
   },
 })
