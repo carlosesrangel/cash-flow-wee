@@ -28,6 +28,12 @@ export async function* paginateSumupTransactions<T>(
     // SumUp's `next` link `href` is a bare query string (no path/scheme),
     // e.g. "limit=1&merchant_code=...&oldest_ref=...". Parse it as query
     // params and keep hitting the same fixed path for every page.
-    query = Object.fromEntries(new URLSearchParams(nextLink.href))
+    //
+    // The href is server-composed from a fixed set of params (it carries
+    // `merchant_code`/`skip_tx_result`, which the caller never sent) — it does
+    // NOT echo back the caller's filters. So merge it over `baseQuery` instead
+    // of replacing it: filters like `changes_since` survive across every page,
+    // while the href's own cursor params win on key collisions.
+    query = { ...baseQuery, ...Object.fromEntries(new URLSearchParams(nextLink.href)) }
   }
 }

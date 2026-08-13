@@ -49,6 +49,41 @@ describe('paginateSumupTransactions', () => {
     )
   })
 
+  it('keeps baseQuery filters on page 2+ while letting the next href win on collisions', async () => {
+    vi.mocked(sumupFetch)
+      .mockResolvedValueOnce({
+        items: [{ transaction_code: 'A' }],
+        links: [{ rel: 'next', href: 'limit=1&merchant_code=MC-TEST&oldest_ref=A&order=ascending' }],
+      })
+      .mockResolvedValueOnce({ items: [{ transaction_code: 'B' }], links: [] })
+
+    const { paginateSumupTransactions } = await import('@/lib/sumup/paginate')
+    const pages: unknown[] = []
+    for await (const page of paginateSumupTransactions(
+      'MC-TEST',
+      { changes_since: '2026-01-01T00:00:00Z' },
+      1
+    )) {
+      pages.push(page)
+    }
+
+    expect(sumupFetch).toHaveBeenCalledTimes(2)
+    expect(sumupFetch).toHaveBeenNthCalledWith(1, '/v2.1/merchants/MC-TEST/transactions/history', {
+      changes_since: '2026-01-01T00:00:00Z',
+      limit: 1,
+    })
+    // The `next` href is server-composed and does not echo the caller's filters,
+    // so `changes_since` must survive the merge — otherwise page 2+ of an
+    // incremental sync silently widens back to the full history.
+    expect(sumupFetch).toHaveBeenNthCalledWith(2, '/v2.1/merchants/MC-TEST/transactions/history', {
+      changes_since: '2026-01-01T00:00:00Z',
+      limit: '1',
+      merchant_code: 'MC-TEST',
+      oldest_ref: 'A',
+      order: 'ascending',
+    })
+  })
+
   it('stops after the first page when there is no next link', async () => {
     vi.mocked(sumupFetch).mockResolvedValueOnce({ items: [{ transaction_code: 'A' }], links: [] })
 

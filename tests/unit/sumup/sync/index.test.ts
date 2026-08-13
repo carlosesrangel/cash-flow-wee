@@ -62,4 +62,79 @@ describe('runSumupSync', () => {
       expect.objectContaining({ status: 'failed', errorMessage: expect.stringContaining('boom') })
     )
   })
+
+  it('runs payouts before transactions', async () => {
+    const order: string[] = []
+    vi.mocked(syncSumupPayouts).mockImplementationOnce(async () => {
+      order.push('payouts')
+      return { received: 2 }
+    })
+    vi.mocked(syncSumupTransactions).mockImplementationOnce(async () => {
+      order.push('transactions')
+      return { received: 3 }
+    })
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await runSumupSync(ORG_ID, 'initial')
+
+    expect(order).toEqual(['payouts', 'transactions'])
+  })
+
+  it('still runs transactions when payouts fails, and payouts when transactions fails', async () => {
+    vi.mocked(syncSumupPayouts).mockRejectedValueOnce(new Error('payouts boom'))
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('payouts boom')
+    expect(syncSumupTransactions).toHaveBeenCalled()
+
+    const payoutsCallsSoFar = vi.mocked(syncSumupPayouts).mock.calls.length
+    vi.mocked(syncSumupTransactions).mockRejectedValueOnce(new Error('transactions boom'))
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('transactions boom')
+    expect(vi.mocked(syncSumupPayouts).mock.calls.length).toBe(payoutsCallsSoFar + 1)
+  })
+
+  it('records what the succeeding leg received even when the other leg fails', async () => {
+    vi.mocked(syncSumupTransactions).mockRejectedValueOnce(new Error('transactions boom'))
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('transactions boom')
+
+    expect(finishSyncRun).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ status: 'failed', recordsReceived: 2, errorCount: 1 })
+    )
+  })
+
+  it('records the partial progress a failing leg made before it failed', async () => {
+    const { SumupSyncLegError } = await import('@/lib/sumup/sync/errors')
+    vi.mocked(syncSumupTransactions).mockRejectedValueOnce(
+      new SumupSyncLegError('detail boom', { received: 7 })
+    )
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('detail boom')
+
+    // 2 from payouts + the 7 rows the transactions leg had already persisted.
+    expect(finishSyncRun).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ status: 'failed', recordsReceived: 9 })
+    )
+  })
+
+  it('reports both failures when both legs fail', async () => {
+    vi.mocked(syncSumupPayouts).mockRejectedValueOnce(new Error('payouts boom'))
+    vi.mocked(syncSumupTransactions).mockRejectedValueOnce(new Error('transactions boom'))
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow(/payouts boom; transactions boom/)
+
+    expect(finishSyncRun).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({
+        status: 'failed',
+        errorCount: 2,
+        errorMessage: 'payouts boom; transactions boom',
+      })
+    )
+  })
 })
