@@ -28,7 +28,7 @@ export async function syncContacts(
   const admin = createAdminSupabaseClient()
   let received = 0
 
-  const query = options.since ? { dataAtualizacao: toOlistDateParam(options.since) } : {}
+  const query = options.since ? { dataAtualizacao: `${toOlistDateParam(options.since)} 00:00:00` } : {}
 
   for await (const page of paginateOlist<OlistContact>(orgId, '/contatos', query)) {
     if (page.length === 0) continue

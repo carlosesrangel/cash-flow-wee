@@ -63,7 +63,7 @@ describe('syncContacts', () => {
     expect(paginateOlist).toHaveBeenCalledWith(
       ORG_ID,
       '/contatos',
-      expect.objectContaining({ dataAtualizacao: '2026-06-01' })
+      expect.objectContaining({ dataAtualizacao: '2026-06-01 00:00:00' })
     )
   })
 })
