@@ -90,3 +90,16 @@
   completa, sobre contas com `situacao` em aberto independentemente da idade
   do vencimento — mudança arquitetural maior, fora do escopo deste pacote de
   correções.
+- **Janela de detecção de sincronização ativa (10 min) pode ser menor que uma
+  sincronização `initial` real**: `app/api/integracoes/olist/sync/route.ts`
+  bloqueia uma segunda sincronização se já existe uma rodando há menos de 10
+  minutos (proteção contra duplicação de `olist_order_items` por corridas
+  concorrentes). Como a sincronização `initial` agora busca ~10 anos de
+  histórico de contas a pagar/receber, mais uma chamada por pedido (com
+  possível backoff por rate limit), uma primeira sincronização real pode
+  demorar mais que 10 minutos — nesse caso, uma segunda requisição não seria
+  mais bloqueada, reabrindo a janela de corrida que a proteção existe para
+  fechar. Adiado: aumentar o corte de obsolescência (ou derivá-lo de um
+  heartbeat em vez de um valor fixo) quando o volume real de dados justificar
+  o ajuste — não implementado agora para não adicionar complexidade sem medir
+  o tempo real de uma sincronização inicial completa primeiro.
