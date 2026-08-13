@@ -12,14 +12,21 @@ import { refreshTokens } from '@/lib/olist/oauth'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
+function makeUpdateMock() {
+  const updateEq2 = vi.fn().mockResolvedValue({ error: null })
+  const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+  const update = vi.fn().mockReturnValue({ eq: updateEq1 })
+  return { update, updateEq1, updateEq2 }
+}
+
 function makeAdminMock(connectionRow: Record<string, unknown> | null) {
-  const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+  const { update, updateEq1, updateEq2 } = makeUpdateMock()
   const single = vi.fn().mockResolvedValue({ data: connectionRow, error: null })
   const eq2 = vi.fn().mockReturnValue({ single })
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
   const select = vi.fn().mockReturnValue({ eq: eq1 })
   const from = vi.fn().mockReturnValue({ select, update })
-  return { from }
+  return { from, updateEq1, updateEq2 }
 }
 
 describe('getValidConnection', () => {
@@ -64,6 +71,8 @@ describe('getValidConnection', () => {
 
     expect(result).toEqual({ accessToken: 'new-token' })
     expect(refreshTokens).toHaveBeenCalledWith('refresh-token')
+    expect(adminMock.updateEq1).toHaveBeenCalledWith('org_id', ORG_ID)
+    expect(adminMock.updateEq2).toHaveBeenCalledWith('provider', 'olist')
   })
 
   it('returns null and does not throw when refresh fails (refresh token expired)', async () => {
@@ -95,7 +104,9 @@ describe('getValidConnection', () => {
 
   it('throws when persisting the refreshed tokens fails', async () => {
     const nearExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString()
-    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: { message: 'db down' } }) })
+    const updateEq2 = vi.fn().mockResolvedValue({ error: { message: 'db down' } })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const update = vi.fn().mockReturnValue({ eq: updateEq1 })
     const single = vi.fn().mockResolvedValue({
       data: {
         access_token: 'old-token',
@@ -119,11 +130,16 @@ describe('getValidConnection', () => {
     const { getValidConnection } = await import('@/lib/olist/client')
 
     await expect(getValidConnection(ORG_ID)).rejects.toThrow(/db down/)
+
+    expect(updateEq1).toHaveBeenCalledWith('org_id', ORG_ID)
+    expect(updateEq2).toHaveBeenCalledWith('provider', 'olist')
   })
 
   it('throws when marking precisa_reautorizar fails after a refresh failure', async () => {
     const nearExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString()
-    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: { message: 'db down' } }) })
+    const updateEq2 = vi.fn().mockResolvedValue({ error: { message: 'db down' } })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const update = vi.fn().mockReturnValue({ eq: updateEq1 })
     const single = vi.fn().mockResolvedValue({
       data: {
         access_token: 'old-token',
@@ -143,6 +159,9 @@ describe('getValidConnection', () => {
     const { getValidConnection } = await import('@/lib/olist/client')
 
     await expect(getValidConnection(ORG_ID)).rejects.toThrow(/db down/)
+
+    expect(updateEq1).toHaveBeenCalledWith('org_id', ORG_ID)
+    expect(updateEq2).toHaveBeenCalledWith('provider', 'olist')
   })
 
   it('shares one in-flight refresh across concurrent calls for the same org', async () => {

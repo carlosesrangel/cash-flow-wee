@@ -55,6 +55,7 @@ async function fetchValidConnection(orgId: string): Promise<{ accessToken: strin
       .from('integration_connections')
       .update({ status: 'precisa_reautorizar', updated_at: new Date().toISOString() })
       .eq('org_id', orgId)
+      .eq('provider', 'olist')
 
     if (error) {
       throw new Error(`Falha ao marcar conexão Olist como precisa_reautorizar: ${error.message}`)
@@ -73,6 +74,7 @@ async function fetchValidConnection(orgId: string): Promise<{ accessToken: strin
       updated_at: new Date().toISOString(),
     })
     .eq('org_id', orgId)
+    .eq('provider', 'olist')
 
   if (error) {
     throw new Error(`Falha ao persistir tokens renovados da Olist: ${error.message}`)
