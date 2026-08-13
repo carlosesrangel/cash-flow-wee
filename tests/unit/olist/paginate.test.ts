@@ -41,4 +41,32 @@ describe('paginateOlist', () => {
     expect(pages).toEqual([[]])
     expect(olistFetch).toHaveBeenCalledTimes(1)
   })
+
+  it('terminates instead of hanging when paginacao.total is malformed', async () => {
+    // Every call (not just the first) returns a non-empty page with a malformed total, so if the
+    // termination guard regressed, the generator would loop forever calling olistFetch.
+    vi.mocked(olistFetch).mockResolvedValue({
+      itens: [{ id: 1 }],
+      paginacao: { limit: 10, offset: 0, total: undefined as unknown as number },
+    })
+
+    const { paginateOlist } = await import('@/lib/olist/paginate')
+
+    const collectAll = async () => {
+      const pages: unknown[] = []
+      for await (const page of paginateOlist(ORG_ID, '/contatos', {}, 10)) {
+        pages.push(page)
+      }
+      return pages
+    }
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('paginateOlist did not terminate within 1000ms')), 1000)
+    )
+
+    const pages = await Promise.race([collectAll(), timeout])
+
+    expect(pages).toEqual([[{ id: 1 }]])
+    expect(olistFetch).toHaveBeenCalledTimes(1)
+  })
 })

@@ -23,6 +23,7 @@ export async function* paginateOlist<T>(
     yield page.itens
 
     offset += pageSize
-    if (offset >= page.paginacao.total) break
+    const total = page.paginacao?.total
+    if (page.itens.length === 0 || !Number.isFinite(total) || offset >= total) break
   }
 }
