@@ -4,13 +4,16 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type Props = {
-  status: 'configurado' | 'erro_configuracao'
+  // `nao_verificado` is what non-managers get: the live status check is only
+  // run for users who can actually act on the result (app/(app)/integracoes).
+  status: 'configurado' | 'erro_configuracao' | 'nao_verificado'
   canManage: boolean
 }
 
 const STATUS_LABEL: Record<Props['status'], string> = {
   configurado: 'Configurado',
   erro_configuracao: 'Erro de configuração',
+  nao_verificado: 'Não verificado',
 }
 
 export function SumupCard({ status, canManage }: Props) {
@@ -44,7 +47,7 @@ export function SumupCard({ status, canManage }: Props) {
         <div className="mt-3 flex gap-2">
           <button
             onClick={handleSync}
-            disabled={syncing || status === 'erro_configuracao'}
+            disabled={syncing || status !== 'configurado'}
             className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {syncing ? 'Sincronizando...' : 'Sincronizar agora'}

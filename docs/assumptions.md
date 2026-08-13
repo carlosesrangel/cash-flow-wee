@@ -103,3 +103,48 @@
   heartbeat em vez de um valor fixo) quando o volume real de dados justificar
   o ajuste — não implementado agora para não adicionar complexidade sem medir
   o tempo real de uma sincronização inicial completa primeiro.
+
+
+## Riscos conhecidos (Fase 3 — Integração SumUp)
+
+- **Sincronização de payouts falha em vez de truncar silenciosamente, e não há
+  caminho de recuperação automática**: `lib/sumup/sync/payouts.ts` pede o
+  máximo documentado de `limit=9999` ao endpoint `/v1.0/merchants/{code}/payouts`,
+  que devolve um array JSON puro, sem nenhum metadado de paginação (sem `Link`,
+  sem contagem total). Se a resposta vier com exatamente 9999 itens, é
+  impossível distinguir "esse é o total real" de "houve truncamento
+  silencioso", então o sync lança um erro e a execução inteira é marcada como
+  `failed`. Tradeoff intencional (falhar alto em vez de registrar dado
+  incompleto como sucesso), mas significa que um comerciante com ≥9999 payouts
+  na janela sincronizada fica sem sincronização de payouts até que alguém
+  reduza a janela manualmente. Adiado: implementar paginação real por fatias
+  de data (partir a janela ao meio recursivamente quando o limite for atingido)
+  quando o volume da WEE se aproximar dessa ordem de grandeza — hoje está
+  ordens de magnitude abaixo.
+- **A janela incremental de 24h só é aplicada em gatilho manual**: assim como
+  na Olist, `lib/sumup/sync/index.ts` deriva `since = agora - 24h` para todo
+  sync incremental, e esse valor vira `changes_since` na API de transações
+  (payouts não tem filtro por data de atualização: usa uma janela deslizante
+  de 90 dias por `payout_date`). Não existe agendamento automático nesta fase
+  — a sincronização só roda quando um `OWNER_ADMIN` clica em "Sincronizar
+  agora". Se o intervalo entre dois cliques for maior que 24h, transações
+  alteradas nesse intervalo maior podem ser ignoradas: `changes_since` é um
+  filtro literal por data de alteração, não uma marca d'água mantida pelo
+  servidor, então nada compensa o buraco. Mitigação parcial já existente: se
+  não houver nenhum `sync_runs` bem-sucedido anterior, a rota roda em modo
+  `initial` (histórico completo) — inclusive depois de uma execução `failed`.
+  Adiado: quando houver agendamento automático, derivar `since` do timestamp
+  da última sincronização bem-sucedida (mais margem de sobreposição).
+- **Isolamento entre as pernas do sync e preservação de filtros na paginação
+  foram corrigidos em revisão, não em produção**: o orquestrador
+  (`lib/sumup/sync/index.ts`) originalmente abortava payouts quando transações
+  falhava e registrava `records_received = 0` mesmo tendo persistido milhares
+  de linhas; e a paginação (`lib/sumup/paginate.ts`) descartava o `baseQuery`
+  (incluindo `changes_since`) a partir da página 2, porque o `href` do link
+  `next` da SumUp é composto pelo servidor e não reflete os filtros do
+  chamador. Ambos foram corrigidos, mas foram encontrados por revisão de
+  código e não por um incidente real — não há evidência de produção
+  confirmando o comportamento corrigido ponta a ponta. Ao depurar
+  inconsistências de sincronização da SumUp, leia o histórico git de
+  `lib/sumup/sync/index.ts` e `lib/sumup/paginate.ts` antes de supor que o
+  problema é novo.

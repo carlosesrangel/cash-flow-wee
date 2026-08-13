@@ -72,7 +72,7 @@ comportamento da API — não requer nenhum tratamento especial no código.
 - **A API Olist retorna string vazia (`""`) — não `null` nem a chave
   omitida — para campos de data não preenchidos.** O Postgres rejeita `""`
   como literal `timestamptz`/`date` inválido. Tratado com o helper
-  compartilhado `emptyToNull()` (`lib/olist/date.ts`), aplicado a todo campo
+  compartilhado `emptyToNull()` (`lib/integrations/date.ts`), aplicado a todo campo
   de data nos upserts de pedidos e contatos.
 - **Rate limit (`429`) em buscas sequenciais rápidas de detalhe de pedido**
   (`GET /pedidos/{id}`) durante sync de grande volume — observado ao vivo no

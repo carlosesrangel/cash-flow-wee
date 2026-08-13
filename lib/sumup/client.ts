@@ -3,6 +3,12 @@ import 'server-only'
 const API_BASE_URL = 'https://api.sumup.com'
 const MAX_RETRIES = 3
 const RETRY_STATUS_CODES = new Set([429, 500, 502, 503, 504])
+// Bound a single request so a hung or unresponsive SumUp connection cannot
+// block a caller indefinitely (the Integrações page checks status on render).
+const REQUEST_TIMEOUT_MS = 15_000
+// Upstream error bodies are third-party content of unbounded size; cap them
+// before embedding them in an Error message that reaches logs and the UI.
+const MAX_ERROR_DETAIL_CHARS = 500
 
 function getApiKey(): string {
   const key = process.env.SUMUP_API_KEY
@@ -41,13 +47,14 @@ export async function sumupFetch<T>(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${getApiKey()}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
 
     if (response.ok) {
       return (await response.json()) as T
     }
 
-    const detail = await response.text()
+    const detail = (await response.text()).slice(0, MAX_ERROR_DETAIL_CHARS)
     lastError = new Error(`SumUp API request failed (${response.status}) for ${path}: ${detail}`)
 
     if (!RETRY_STATUS_CODES.has(response.status) || attempt === MAX_RETRIES - 1) {

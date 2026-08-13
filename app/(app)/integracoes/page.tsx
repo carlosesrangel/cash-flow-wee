@@ -12,8 +12,12 @@ export default async function IntegracoesPage() {
     ? await getOlistConnectionStatus(member.orgId)
     : { status: 'desconectado' as const, connectedAt: null }
 
-  const sumupStatus = await checkSumupStatus()
   const canManage = Boolean(member && canManageIntegrations(member.role))
+
+  // Unlike the Olist status (a local DB read), checking SumUp means a live
+  // outbound call to their API on every render. Only spend it on users who can
+  // act on the result — everyone else sees "não verificado".
+  const sumupStatus = canManage ? await checkSumupStatus() : ('nao_verificado' as const)
 
   return (
     <div className="space-y-6">
