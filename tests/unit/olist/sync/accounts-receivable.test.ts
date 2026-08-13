@@ -5,6 +5,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminSupabaseClient: vi.fn() }))
 
 import { paginateOlist } from '@/lib/olist/paginate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { toOlistDateParam } from '@/lib/olist/date'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -13,7 +14,10 @@ async function* fakePages(pages: unknown[][]) {
 }
 
 describe('syncAccountsReceivable', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
 
   it('maps and upserts accounts receivable', async () => {
     vi.mocked(paginateOlist).mockReturnValue(
@@ -60,7 +64,12 @@ describe('syncAccountsReceivable', () => {
 
     const call = vi.mocked(paginateOlist).mock.calls[0]
     expect(call[1]).toBe('/contas-receber')
-    expect(call[2]).toHaveProperty('dataInicialVencimento')
+
+    const expectedStart = new Date()
+    expectedStart.setDate(expectedStart.getDate() - 90)
+    expect((call[2] as { dataInicialVencimento: string }).dataInicialVencimento).toBe(
+      toOlistDateParam(expectedStart)
+    )
   })
 
   it('accepts an overridable windowDays option', async () => {
@@ -70,6 +79,11 @@ describe('syncAccountsReceivable', () => {
     await syncAccountsReceivable(ORG_ID, { windowDays: 60 })
 
     const call = vi.mocked(paginateOlist).mock.calls[0]
-    expect(call[2]).toHaveProperty('dataInicialVencimento')
+
+    const expectedStart60 = new Date()
+    expectedStart60.setDate(expectedStart60.getDate() - 60)
+    expect((call[2] as { dataInicialVencimento: string }).dataInicialVencimento).toBe(
+      toOlistDateParam(expectedStart60)
+    )
   })
 })
