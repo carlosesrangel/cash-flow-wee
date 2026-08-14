@@ -15,3 +15,7 @@ export function canEditForecast(role: OrganizationRole): boolean {
 export function canCreateScenario(role: OrganizationRole): boolean {
   return role === 'OWNER_ADMIN' || role === 'MANAGER'
 }
+
+export function canManageReconciliation(role: OrganizationRole): boolean {
+  return role === 'OWNER_ADMIN' || role === 'MANAGER'
+}

@@ -4,6 +4,7 @@ import {
   canManageIntegrations,
   canEditForecast,
   canCreateScenario,
+  canManageReconciliation,
 } from '@/lib/auth/rbac'
 
 describe('rbac predicates', () => {
@@ -29,5 +30,11 @@ describe('rbac predicates', () => {
     expect(canCreateScenario('OWNER_ADMIN')).toBe(true)
     expect(canCreateScenario('MANAGER')).toBe(true)
     expect(canCreateScenario('VIEWER')).toBe(false)
+  })
+
+  it('OWNER_ADMIN and MANAGER can manage reconciliation, VIEWER cannot', () => {
+    expect(canManageReconciliation('OWNER_ADMIN')).toBe(true)
+    expect(canManageReconciliation('MANAGER')).toBe(true)
+    expect(canManageReconciliation('VIEWER')).toBe(false)
   })
 })
