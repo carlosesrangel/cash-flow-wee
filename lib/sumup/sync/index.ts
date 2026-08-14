@@ -2,6 +2,7 @@ import { startSyncRun, finishSyncRun } from '@/lib/olist/sync/run-context'
 import { syncSumupTransactions } from '@/lib/sumup/sync/transactions'
 import { syncSumupPayouts } from '@/lib/sumup/sync/payouts'
 import { receivedBeforeFailure } from '@/lib/sumup/sync/errors'
+import { runReconciliation } from '@/lib/reconciliation'
 
 type LegOutcome = { received: number; error: Error | null }
 
@@ -41,6 +42,20 @@ export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental
   const errors = [payouts.error, transactions.error].filter((error): error is Error => error !== null)
 
   if (errors.length === 0) {
+    try {
+      await runReconciliation(orgId)
+    } catch (error) {
+      await finishSyncRun(runId, {
+        status: 'failed',
+        recordsReceived: received,
+        recordsCreated: null,
+        recordsUpdated: null,
+        errorCount: 1,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+
     await finishSyncRun(runId, {
       status: 'success',
       recordsReceived: received,

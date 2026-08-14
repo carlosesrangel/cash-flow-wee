@@ -6,15 +6,23 @@ vi.mock('@/lib/olist/sync/run-context', () => ({
   startSyncRun: vi.fn().mockResolvedValue('run-1'),
   finishSyncRun: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('@/lib/reconciliation', () => ({ runReconciliation: vi.fn().mockResolvedValue({ processed: 0 }) }))
 
 import { syncSumupTransactions } from '@/lib/sumup/sync/transactions'
 import { syncSumupPayouts } from '@/lib/sumup/sync/payouts'
 import { startSyncRun, finishSyncRun } from '@/lib/olist/sync/run-context'
+import { runReconciliation } from '@/lib/reconciliation'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
 describe('runSumupSync', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    // `restoreAllMocks` only restores spies created with `vi.spyOn`; the plain
+    // `vi.fn()` mocks declared in the `vi.mock` factories above keep accumulating
+    // calls across tests within this file unless explicitly cleared too.
+    vi.clearAllMocks()
+  })
 
   it('logs a sync_runs entry for the sumup integration and sums received counts', async () => {
     const { runSumupSync } = await import('@/lib/sumup/sync/index')
@@ -135,6 +143,34 @@ describe('runSumupSync', () => {
         errorCount: 2,
         errorMessage: 'payouts boom; transactions boom',
       })
+    )
+  })
+
+  it('runs reconciliation after both legs succeed, before marking sync_runs success', async () => {
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await runSumupSync(ORG_ID, 'initial')
+
+    expect(runReconciliation).toHaveBeenCalledWith(ORG_ID)
+  })
+
+  it('does not run reconciliation when a leg fails', async () => {
+    vi.mocked(syncSumupPayouts).mockRejectedValueOnce(new Error('boom'))
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('boom')
+
+    expect(runReconciliation).not.toHaveBeenCalled()
+  })
+
+  it('marks the run failed and rethrows when reconciliation throws', async () => {
+    vi.mocked(runReconciliation).mockRejectedValueOnce(new Error('reconciliation boom'))
+
+    const { runSumupSync } = await import('@/lib/sumup/sync/index')
+    await expect(runSumupSync(ORG_ID, 'initial')).rejects.toThrow('reconciliation boom')
+
+    expect(finishSyncRun).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ status: 'failed', errorMessage: expect.stringContaining('reconciliation boom') })
     )
   })
 })

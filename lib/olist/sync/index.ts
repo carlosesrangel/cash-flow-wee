@@ -6,6 +6,7 @@ import { syncProducts } from '@/lib/olist/sync/products'
 import { syncOrders } from '@/lib/olist/sync/orders'
 import { syncAccountsPayable } from '@/lib/olist/sync/accounts-payable'
 import { syncAccountsReceivable } from '@/lib/olist/sync/accounts-receivable'
+import { runReconciliation } from '@/lib/reconciliation'
 
 export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental'): Promise<void> {
   const runId = await startSyncRun(orgId, 'olist')
@@ -33,6 +34,8 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
     for (const result of [sellers, paymentMethods, contacts, products, orders, accountsPayable, accountsReceivable]) {
       received += result.received
     }
+
+    await runReconciliation(orgId)
 
     await finishSyncRun(runId, {
       status: 'success',
