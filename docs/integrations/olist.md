@@ -29,7 +29,7 @@ Status: implementada na Fase 2. API V3, OAuth2.
 | Produtos | `GET /produtos` | limit/offset | não (full sync sempre nesta fase) |
 | Pedidos | `GET /pedidos` (lista) + `GET /pedidos/{id}` (detalhe, traz itens/cliente/vendedor/pagamento) | limit/offset | `dataAtualizacao` |
 | Contas a pagar | `GET /contas-pagar` | limit/offset | janela deslizante (sem filtro de data de atualização na API) |
-| Contas a receber | `GET /contas-receber` | limit/offset | janela deslizante (sem filtro de data de atualização na API) |
+| Contas a receber | `GET /contas-receber` (lista) + `GET /contas-receber/{id}` (detalhe, traz taxa/forma de recebimento/data de liquidação — Fase 4) | limit/offset | janela deslizante (sem filtro de data de atualização na API) |
 
 Todos os endpoints acima retornam o mesmo formato de envelope de paginação,
 `{ itens, paginacao }`. Isso inclui `/contas-pagar`: a especificação OpenAPI
@@ -92,3 +92,10 @@ comportamento da API — não requer nenhum tratamento especial no código.
   vale revisitar (relacionado ao rate limit acima).
 - Nenhuma escrita na Olist é feita nesta fase nem está planejada até segunda
   ordem — integração estritamente read-only.
+- **`syncAccountsReceivable` busca o detalhe de toda conta a receber
+  listada, não só as pagas em cartão** (Fase 4): a listagem não informa
+  `formaRecebimento` antecipadamente, então não há como filtrar antes de
+  buscar o detalhe. No volume observado (~625 contas na conta real da WEE)
+  isso fica dentro do rate limit já aplicado por `lib/olist/client.ts`; se
+  o volume crescer ordens de magnitude, essa chamada N+1 por linha se torna
+  o gargalo dominante da sincronização de contas a receber.

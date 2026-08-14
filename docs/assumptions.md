@@ -148,3 +148,26 @@
   inconsistências de sincronização da SumUp, leia o histórico git de
   `lib/sumup/sync/index.ts` e `lib/sumup/paginate.ts` antes de supor que o
   problema é novo.
+
+## Riscos conhecidos (Fase 4 — Reconciliação)
+
+- **O número da parcela é inferido por regex sobre `numeroDocumento`, não
+  por um campo estruturado**: `lib/reconciliation/match.ts`,
+  `parseInstallmentNumber`, extrai o sufixo `/NN` de valores como
+  `"000516/03"`. Se a Olist mudar esse formato, ou se alguma conta a
+  receber legítima tiver um `numeroDocumento` sem esse sufixo por outro
+  motivo (não observado nos dados reais inspecionados), a parcela cai em
+  `nao_reconciliado` em vez de errar silenciosamente — mas nunca é
+  reconciliada até alguém investigar.
+- **O motor reprocessa toda conta a receber em cartão ainda não resolvida a
+  cada sync bem-sucedido**, não só as alteradas desde a última execução —
+  não há uma marca d'água de "já tentei essa parcela e não achei
+  candidato". Em volumes pequenos (centenas de parcelas) isso é barato; se
+  o volume crescer significativamente, vale revisitar.
+- **Nenhuma evidência de produção end-to-end ainda**: assim como as Fases
+  2/3 na sua entrega inicial, o motor foi validado com fixtures
+  determinísticas, não contra um sync completo real com dados que
+  efetivamente casam. Ao depurar um caso real de `conflito` ou
+  `nao_reconciliado` inesperado, comece pelos dados reais em
+  `olist_accounts_receivable`/`sumup_transaction_events` no Supabase
+  Studio antes de assumir um bug no algoritmo.
