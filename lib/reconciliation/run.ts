@@ -1,5 +1,4 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { toLocalDateParam } from '@/lib/integrations/date'
 import {
   parseInstallmentNumber,
   computeGrossEstimate,
@@ -12,6 +11,12 @@ import {
 const RESOLVED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
 const CARD_PAYMENT_METHODS = ['Cartão de crédito', 'Cartão de débito']
 const DATE_WINDOW_DAYS = 5
+/**
+ * Supabase's hosted PostgREST caps a single response (commonly 1000 rows), so
+ * every read below is paginated. Silently truncating the resolved-ids set
+ * would let the main loop upsert over a manually-resolved row.
+ */
+const PAGE_SIZE = 500
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
@@ -35,46 +40,93 @@ type SumupEventCandidateRow = {
   } | null
 }
 
+const AR_COLUMNS = 'id, valor, data_vencimento, numero_documento, forma_recebimento_nome'
+
+/**
+ * Shifts a bare SQL `date` string (YYYY-MM-DD) by `days`, treating it purely
+ * as a calendar date. All arithmetic happens in UTC and the result is
+ * re-serialized as a calendar day, so the answer never depends on the host
+ * machine's timezone. Do NOT route these values through `toLocalDateParam`:
+ * that helper converts a real wall-clock `Date` into a São Paulo calendar
+ * day, which shifts a UTC-midnight-parsed bare date back by one day and
+ * silently narrowed this window to -5/+4 days.
+ */
+function shiftDateString(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+type PageResult<T> = { data: T[] | null; error: { message: string } | null }
+
+/**
+ * Drains a paginated PostgREST read, calling `page(from, to)` until a page
+ * comes back shorter than `PAGE_SIZE`.
+ */
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  errorLabel: string
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) {
+      throw new Error(`${errorLabel}: ${error.message}`)
+    }
+    const batch = data ?? []
+    rows.push(...batch)
+    if (batch.length < PAGE_SIZE) break
+  }
+  return rows
+}
+
 /**
  * Runs the matching engine over every card-paid AR installment that doesn't
- * already have a resolved (auto or manual) `reconciliation_matches` row.
+ * already have a resolved (auto or manual) `reconciliation_matches` row, then
+ * repairs already-resolved rows whose SumUp FKs were nulled out by a SumUp
+ * resync.
  * Idempotent: re-running never touches a row already resolved, and upserts
  * (rather than inserts) everything else — see the unique constraint on
  * `(org_id, olist_accounts_receivable_id)`.
  */
 export async function runReconciliation(orgId: string): Promise<{ processed: number }> {
   const admin = createAdminSupabaseClient()
+  // `processed` counts only newly-matched (previously unresolved) AR rows;
+  // repair-pass re-links are deliberately excluded since they don't re-decide
+  // a match, they only restore a broken FK on an already-counted row.
   let processed = 0
 
-  const { data: resolvedRows, error: resolvedError } = await admin
-    .from('reconciliation_matches')
-    .select('olist_accounts_receivable_id')
-    .eq('org_id', orgId)
-    .in('status', RESOLVED_STATUSES)
+  const resolvedRows = await fetchAllPages<{ olist_accounts_receivable_id: string }>(
+    (from, to) =>
+      admin
+        .from('reconciliation_matches')
+        .select('olist_accounts_receivable_id')
+        .eq('org_id', orgId)
+        .in('status', RESOLVED_STATUSES)
+        .range(from, to),
+    'Failed to load resolved reconciliation_matches'
+  )
 
-  if (resolvedError) {
-    throw new Error(`Failed to load resolved reconciliation_matches: ${resolvedError.message}`)
-  }
+  const resolvedIds = new Set(resolvedRows.map((row) => row.olist_accounts_receivable_id))
 
-  const resolvedIds = (resolvedRows ?? []).map((row) => row.olist_accounts_receivable_id as string)
+  const allArRows = await fetchAllPages<AccountsReceivableRow>(
+    (from, to) =>
+      admin
+        .from('olist_accounts_receivable')
+        .select(AR_COLUMNS)
+        .eq('org_id', orgId)
+        .in('forma_recebimento_nome', CARD_PAYMENT_METHODS)
+        .range(from, to),
+    'Failed to load olist_accounts_receivable candidates'
+  )
 
-  let arQuery = admin
-    .from('olist_accounts_receivable')
-    .select('id, valor, data_vencimento, numero_documento, forma_recebimento_nome')
-    .eq('org_id', orgId)
-    .in('forma_recebimento_nome', CARD_PAYMENT_METHODS)
+  // Exclusion is applied client-side rather than via `.not('id','in',(...))`:
+  // embedding every resolved UUID in the request URL blows the URL-length
+  // limit long before the row cap is reached.
+  const arRows = allArRows.filter((row) => !resolvedIds.has(row.id))
 
-  if (resolvedIds.length > 0) {
-    arQuery = arQuery.not('id', 'in', `(${resolvedIds.join(',')})`)
-  }
-
-  const { data: arRows, error: arError } = await arQuery
-
-  if (arError) {
-    throw new Error(`Failed to load olist_accounts_receivable candidates: ${arError.message}`)
-  }
-
-  for (const ar of (arRows ?? []) as AccountsReceivableRow[]) {
+  for (const ar of arRows) {
     processed += 1
 
     const result = await matchOne(admin, orgId, ar)
@@ -103,7 +155,68 @@ export async function runReconciliation(orgId: string): Promise<{ processed: num
     }
   }
 
+  await repairStrandedMatches(admin, orgId)
+
   return { processed }
+}
+
+/**
+ * The SumUp transactions sync deletes and re-inserts every
+ * `sumup_transaction_events` row for a transaction on each run (migration
+ * 0010 — there is no natural key, so every event gets a fresh id). Both FK
+ * columns on `reconciliation_matches` are `on delete set null`, so an
+ * `initial`-mode resync strands every already-resolved row: `status` stays
+ * resolved while both links go null. The main loop above never revisits those
+ * rows (they're in `resolvedIds`), so they are re-linked here.
+ *
+ * Only an unambiguous single candidate re-links. 0 or >1 candidates leave the
+ * row stranded for a future run — never demoted, never silently reassigned,
+ * because the original resolution may have been a manual decision.
+ */
+async function repairStrandedMatches(admin: AdminClient, orgId: string): Promise<void> {
+  const strandedRows = await fetchAllPages<{ id: string; olist_accounts_receivable_id: string }>(
+    (from, to) =>
+      admin
+        .from('reconciliation_matches')
+        .select('id, olist_accounts_receivable_id')
+        .eq('org_id', orgId)
+        .in('status', RESOLVED_STATUSES)
+        .is('sumup_transaction_event_id', null)
+        .range(from, to),
+    'Failed to load stranded reconciliation_matches'
+  )
+
+  for (const stranded of strandedRows) {
+    const { data: arRow, error: arError } = await admin
+      .from('olist_accounts_receivable')
+      .select(AR_COLUMNS)
+      .eq('org_id', orgId)
+      .eq('id', stranded.olist_accounts_receivable_id)
+      .maybeSingle()
+
+    if (arError) {
+      throw new Error(`Failed to load olist_accounts_receivable ${stranded.olist_accounts_receivable_id}: ${arError.message}`)
+    }
+    if (!arRow) continue
+
+    const result = await matchOne(admin, orgId, arRow as AccountsReceivableRow)
+    if (result.status !== 'reconciliado_automaticamente') continue
+
+    // Re-link only: `status`, `resolved_by` and `resolved_at` are left as-is,
+    // since this row was already resolved (possibly manually).
+    const { error: updateError } = await admin
+      .from('reconciliation_matches')
+      .update({
+        sumup_transaction_id: result.sumupTransactionId,
+        sumup_transaction_event_id: result.sumupTransactionEventId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', stranded.id)
+
+    if (updateError) {
+      throw new Error(`Failed to re-link reconciliation_matches ${stranded.id}: ${updateError.message}`)
+    }
+  }
 }
 
 async function matchOne(admin: AdminClient, orgId: string, ar: AccountsReceivableRow) {
@@ -116,24 +229,18 @@ async function matchOne(admin: AdminClient, orgId: string, ar: AccountsReceivabl
     return { status: 'nao_reconciliado' as const, matchReason: { motivo: 'numero_parcela_nao_identificado' } }
   }
 
-  const dueDate = new Date(ar.data_vencimento)
-  const windowStart = new Date(dueDate)
-  windowStart.setDate(windowStart.getDate() - DATE_WINDOW_DAYS)
-  const windowEnd = new Date(dueDate)
-  windowEnd.setDate(windowEnd.getDate() + DATE_WINDOW_DAYS)
-
-  // The date bounds are pushed into the query itself; `withinDateWindow`
-  // below is a defensive re-check against day-boundary/timezone drift
-  // between this JS Date math and Postgres date comparison, not the
-  // primary filter.
+  // `data_vencimento` and `due_date` are both bare SQL `date` columns, so the
+  // ±5-day window is pure calendar-date arithmetic (see `shiftDateString`).
+  // The bounds are pushed into the query itself; `withinDateWindow` below is
+  // a defensive re-check, not the primary filter.
   const { data: eventRows, error } = await admin
     .from('sumup_transaction_events')
     .select('id, due_date, installment_number, sumup_transactions!inner(id, amount, installments_count, status)')
     .eq('org_id', orgId)
     .eq('event_type', 'PAYOUT')
     .eq('installment_number', installmentNumber)
-    .gte('due_date', toLocalDateParam(windowStart))
-    .lte('due_date', toLocalDateParam(windowEnd))
+    .gte('due_date', shiftDateString(ar.data_vencimento, -DATE_WINDOW_DAYS))
+    .lte('due_date', shiftDateString(ar.data_vencimento, DATE_WINDOW_DAYS))
     .eq('sumup_transactions.status', 'SUCCESSFUL')
 
   if (error) {
