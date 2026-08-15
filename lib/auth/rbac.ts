@@ -19,3 +19,7 @@ export function canCreateScenario(role: OrganizationRole): boolean {
 export function canManageReconciliation(role: OrganizationRole): boolean {
   return role === 'OWNER_ADMIN' || role === 'MANAGER'
 }
+
+export function canManageCashBalance(role: OrganizationRole): boolean {
+  return role === 'OWNER_ADMIN'
+}

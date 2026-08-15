@@ -5,6 +5,7 @@ import {
   canEditForecast,
   canCreateScenario,
   canManageReconciliation,
+  canManageCashBalance,
 } from '@/lib/auth/rbac'
 
 describe('rbac predicates', () => {
@@ -36,5 +37,11 @@ describe('rbac predicates', () => {
     expect(canManageReconciliation('OWNER_ADMIN')).toBe(true)
     expect(canManageReconciliation('MANAGER')).toBe(true)
     expect(canManageReconciliation('VIEWER')).toBe(false)
+  })
+
+  it('only OWNER_ADMIN can manage cash balance and manual entries', () => {
+    expect(canManageCashBalance('OWNER_ADMIN')).toBe(true)
+    expect(canManageCashBalance('MANAGER')).toBe(false)
+    expect(canManageCashBalance('VIEWER')).toBe(false)
   })
 })
