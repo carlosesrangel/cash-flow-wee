@@ -9,6 +9,7 @@ const BASE_MATCH = {
   id: 'match-1',
   status: 'nao_reconciliado' as const,
   candidate_ids: [] as string[],
+  match_reason: null,
   olist_accounts_receivable: {
     historico: 'Ref. a NF nº 516, Giovana Dias (parcela 3/3)',
     numero_documento: '000516/03',
@@ -53,6 +54,43 @@ describe('ReconciliationTable', () => {
         canManage={false}
       />
     )
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('shows each candidate\'s amount and date on its Confirmar button when match_reason has candidate details', () => {
+    render(
+      <ReconciliationTable
+        matches={[
+          {
+            ...BASE_MATCH,
+            status: 'conflito',
+            candidate_ids: ['event-1'],
+            match_reason: {
+              candidatos: [
+                { sumupTransactionEventId: 'event-1', valorBrutoSumupEstimado: 379.98, dataVencimentoSumup: '2026-02-02' },
+              ],
+            },
+          },
+        ]}
+        canManage={true}
+      />
+    )
+    expect(screen.getByRole('button', { name: /R\$ 379,98/ })).toBeTruthy()
+  })
+
+  it('falls back to a truncated id when match_reason has no candidate details', () => {
+    render(
+      <ReconciliationTable
+        matches={[{ ...BASE_MATCH, status: 'conflito', candidate_ids: ['event-12345678'], match_reason: null }]}
+        canManage={true}
+      />
+    )
+    expect(screen.getByRole('button', { name: /event-12/ })).toBeTruthy()
+  })
+
+  it('labels a rejeitado_manualmente match and shows no action buttons for it', () => {
+    render(<ReconciliationTable matches={[{ ...BASE_MATCH, status: 'rejeitado_manualmente' }]} canManage={true} />)
+    expect(screen.getByText('Rejeitado manualmente')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
 })

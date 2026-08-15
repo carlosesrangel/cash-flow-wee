@@ -5,12 +5,24 @@ import { useRouter } from 'next/navigation'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateBR } from '@/lib/format/date'
 
-export type MatchStatus = 'reconciliado_automaticamente' | 'reconciliado_manualmente' | 'nao_reconciliado' | 'conflito'
+export type MatchStatus =
+  | 'reconciliado_automaticamente'
+  | 'reconciliado_manualmente'
+  | 'nao_reconciliado'
+  | 'conflito'
+  | 'rejeitado_manualmente'
+
+type MatchReasonCandidate = {
+  sumupTransactionEventId: string
+  valorBrutoSumupEstimado: number
+  dataVencimentoSumup: string
+}
 
 export type MatchRow = {
   id: string
   status: MatchStatus
   candidate_ids: string[]
+  match_reason: { candidatos?: MatchReasonCandidate[] } | null
   olist_accounts_receivable: {
     historico: string | null
     numero_documento: string | null
@@ -24,6 +36,13 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
   reconciliado_manualmente: 'Reconciliado (manual)',
   nao_reconciliado: 'Não reconciliado',
   conflito: 'Conflito',
+  rejeitado_manualmente: 'Rejeitado manualmente',
+}
+
+function candidateLabel(candidateId: string, matchReason: MatchRow['match_reason']): string {
+  const detail = matchReason?.candidatos?.find((c) => c.sumupTransactionEventId === candidateId)
+  if (!detail) return candidateId.slice(0, 8)
+  return `${formatBRL(detail.valorBrutoSumupEstimado)} · ${formatDateBR(detail.dataVencimentoSumup)}`
 }
 
 const RESOLVED_STATUSES: MatchStatus[] = ['reconciliado_automaticamente', 'reconciliado_manualmente']
@@ -109,7 +128,7 @@ export function ReconciliationTable({ matches, canManage }: { matches: MatchRow[
                             disabled={pendingId === match.id}
                             className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
                           >
-                            Confirmar {candidateId.slice(0, 8)}
+                            Confirmar {candidateLabel(candidateId, match.match_reason)}
                           </button>
                         ))}
                       </div>

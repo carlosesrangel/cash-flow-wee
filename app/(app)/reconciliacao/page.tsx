@@ -14,7 +14,7 @@ export default async function ReconciliacaoPage() {
   const { data, error } = await supabase
     .from('reconciliation_matches')
     .select(
-      'id, status, candidate_ids, olist_accounts_receivable:olist_accounts_receivable_id (historico, numero_documento, valor, data_vencimento)'
+      'id, status, candidate_ids, match_reason, olist_accounts_receivable:olist_accounts_receivable_id (historico, numero_documento, valor, data_vencimento)'
     )
     .order('status', { ascending: true })
 
