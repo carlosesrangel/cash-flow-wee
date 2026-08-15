@@ -168,7 +168,7 @@
   2/3 na sua entrega inicial, o motor foi validado com fixtures
   determinísticas, não contra um sync completo real com dados que
   efetivamente casam. **Resolvido por:** a suite de integração
-  (`tests/integration/reconciliation.ts`, executada via `npm run
+  (`tests/integration/reconciliation.test.ts`, executada via `npm run
   test:integration`) agora exercita o motor contra um banco Postgres real,
   validando matches, desfazer, deduplicação e confirmação manual ponta a
   ponta. Ao depurar um caso real de `conflito` ou `nao_reconciliado`

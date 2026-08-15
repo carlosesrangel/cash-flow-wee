@@ -67,8 +67,9 @@ chegou a `rejeitado_manualmente` uma vez, fica ali.
 ## Guarda de deduplicação: uma SumUp não pode ter dois matches
 
 Após executar o motor automático (ou após o usuário confirmar um match manual),
-uma passada de deduplicação (`lib/reconciliation/dedup.ts`) garante que nunhuma
-SumUp está apontada por duas parcelas Olist simultaneamente:
+uma passada de deduplicação (`lib/reconciliation/run.ts`, função
+`guardAgainstDuplicateEventClaims`) garante que nunhuma SumUp está apontada por
+duas parcelas Olist simultaneamente:
 
 - Se dois matches tentam apontar para a mesma SumUp, o perdedor é rebaixado de
   `reconciliado_automaticamente`/`reconciliado_manualmente` para `conflito`.
@@ -103,10 +104,10 @@ npx supabase start
 npm run test:integration
 ```
 
-O test suite (`tests/integration/reconciliation.ts`) exercita o engine completo,
-executando syncs de Olist/SumUp contra fixtures carregadas no banco, validando
-que matches foram criados corretamente, e confirmando comportamentos de
-desfazer e deduplicação contra dados persistidos reais.
+O test suite (`tests/integration/reconciliation.test.ts`) exercita o engine
+completo, executando syncs de Olist/SumUp contra fixtures carregadas no banco,
+validando que matches foram criados corretamente, e confirmando comportamentos
+de desfazer e deduplicação contra dados persistidos reais.
 
 ## Fora de escopo desta fase
 
