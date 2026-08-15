@@ -76,7 +76,8 @@ type PageResult<T> = { data: T[] | null; error: { message: string } | null }
  * Drains a paginated PostgREST read, calling `page(from, to)` until a page
  * comes back shorter than `PAGE_SIZE`.
  */
-async function fetchAllPages<T>(
+/** Exported for reuse by lib/cash-flow/engine.ts — same paginated-read need. */
+export async function fetchAllPages<T>(
   page: (from: number, to: number) => PromiseLike<PageResult<T>>,
   errorLabel: string
 ): Promise<T[]> {
