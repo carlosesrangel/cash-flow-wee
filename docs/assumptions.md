@@ -179,3 +179,38 @@
   inesperado, comece pelos dados reais em
   `olist_accounts_receivable`/`sumup_transaction_events` no Supabase
   Studio antes de assumir um bug no algoritmo.
+
+## Riscos conhecidos (Fase 5 — Motor de Fluxo de Caixa)
+
+- **Data de caixa de contas a pagar é sempre uma aproximação
+  (`data_vencimento`), inclusive para linhas já `realizado`**:
+  `classifyAccountsPayable` (`lib/cash-flow/classify.ts`) usa
+  `data_vencimento` mesmo quando `saldo == 0` (pagamento já efetuado),
+  porque a listagem `/contas-pagar` da Olist não expõe uma data efetiva de
+  pagamento — só vencimento e saldo. Isso significa que uma conta paga
+  antes ou depois do vencimento aparece no dia do vencimento no fluxo de
+  caixa diário, não no dia real do desembolso. Diferente de contas a
+  receber (que têm `data_liquidacao` e, quando reconciliadas com a SumUp,
+  a data ainda mais precisa do evento de payout), não existe hoje nenhum
+  campo mais preciso disponível na API da Olist para contas a pagar.
+  Adiado: se a Olist expuser essa data no futuro (ou se outra fonte de
+  settlement para pagamentos for integrada), usá-la em vez de
+  `data_vencimento` para o bucket `realizado`.
+- **`situacao = 'cancelado'` nunca foi observado nos dados reais da WEE, e a
+  string exata não está confirmada**: `KNOWN_SITUACOES` em
+  `lib/cash-flow/classify.ts` inclui `'cancelado'` por precaução (Prompt
+  Mestre seção 8), mas os únicos valores vistos em produção até agora são
+  `aberto` e `pago`. Se a Olist usar uma grafia diferente (ex.: `cancelada`,
+  `estornado`), essa conta não cai silenciosamente em `aberto` — ela é
+  excluída como `situacao_desconhecida`, com o motivo visível na UI, até
+  alguém confirmar e ajustar `KNOWN_SITUACOES`.
+- **Pagamento parcial (`0 < saldo < valor`) ainda não tem fixture real,
+  só cobertura sintética em teste unitário**: o motor classifica qualquer
+  `saldo > 0` como `contratado`, o que cobre pagamento parcial
+  corretamente em teoria (testado em `tests/unit/cash-flow/classify.test.ts`
+  com valores sintéticos), mas nenhuma conta com pagamento parcial real foi
+  observada nos ~625 registros de contas a receber ou ~419 de contas a
+  pagar sincronizados da WEE até esta fase. Ao depurar um caso real de
+  pagamento parcial, confirmar que o comportamento observado bate com o
+  esperado antes de assumir que o código está correto só porque os testes
+  unitários passam.

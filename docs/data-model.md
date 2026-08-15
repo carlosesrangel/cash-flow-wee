@@ -36,3 +36,46 @@ Ver `supabase/migrations/0001_foundation.sql` para as políticas completas.
 `cash_balance_snapshots`, `manual_cash_entries`, `forecast_versions`,
 `forecast_entries`, `forecast_scenarios`, `payment_scenarios`,
 `payment_scenario_items`, `tax_rule_versions`, `reconciliation_matches`.
+
+## Tabelas da Fase 5 (motor de fluxo de caixa)
+
+`supabase/migrations/0013_cash_flow.sql`.
+
+- `cash_balance_snapshots(id, org_id, reference_date, bank_balance,
+  cash_on_hand, liquid_investments, notes, created_by, created_at)` — o
+  saldo bancário confirmado em uma data de referência, usado como ponto de
+  partida (`saldoInicial`) para o rollforward diário
+  (`lib/cash-flow/engine.ts`'s `resolveOpeningBalance`). **Write-once**: não
+  existe política de `update`/`delete` para `anon`/`authenticated` — uma
+  correção é sempre uma nova linha com `reference_date` mais recente, nunca
+  uma edição da anterior. Escrita só via `service_role`, a partir de
+  `app/api/caixa/saldo/route.ts`, que exige `canManageCashBalance`
+  (`OWNER_ADMIN`) antes de inserir e registra a ação em `audit_logs`.
+- `manual_cash_entries(id, org_id, type, description, amount, entry_date,
+  responsible_profile_id, justification, created_by, created_at,
+  updated_at, deleted_at)` — lançamentos manuais de caixa fora do Olist/
+  SumUp. `type` é `entrada`, `saida` ou `ajuste_saldo`; `entrada`/`saida`
+  entram no fluxo diário como `realizado` (ver `docs/financial-rules.md`),
+  `ajuste_saldo` é um delta assinado aplicado apenas ao saldo confirmado
+  entre snapshots, nunca ao total de entradas/saídas do dia. `amount` é
+  obrigatoriamente positivo para `entrada`/`saida` (constraint `check`); só
+  `ajuste_saldo` pode ser negativo. **Soft-delete-only por desenho**: a
+  coluna `deleted_at` existe desde a migration e todo carregamento do motor
+  (`lib/cash-flow/engine.ts`) já filtra `is('deleted_at', null)`, mas esta
+  fase não implementa nenhuma rota de remoção — hoje `app/api/caixa/ajustes/
+  route.ts` só expõe `POST` (criação). Quando uma rota de remoção for
+  adicionada, ela deve preencher `deleted_at` em vez de fazer `delete`, nunca
+  apagar a linha (Prompt Mestre seção 22, "nunca apagar silenciosamente").
+  Escrita (criação) só via `service_role`, a partir dessa rota, restrita a
+  `OWNER_ADMIN` e auditada em `audit_logs`.
+
+### RLS (Fase 5)
+
+Ambas as tabelas seguem o padrão já estabelecido: `enable row level security`
+mais uma única política de leitura (`for select using (is_org_member(org_id))`)
+para membros da organização. Não há política de escrita para `anon`/
+`authenticated` em nenhuma das duas — todo `insert`/`update` passa pelas
+rotas de API acima, que usam a `service_role` (que ignora RLS) só depois de
+checar `canManageCashBalance` no código da aplicação. Isso é intencional:
+mantém a regra de autorização (só `OWNER_ADMIN`) em um único lugar (as
+rotas), em vez de duplicá-la em política de RLS e em código.

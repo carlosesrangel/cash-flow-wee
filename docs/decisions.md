@@ -29,3 +29,12 @@ Contexto: transparência total é prioritária para lógica financeira que
 virá nas próximas fases. Decisão: migrations SQL versionadas via Supabase
 CLI, queries manuscritas com `supabase-js`, validação Zod em toda borda —
 sem Prisma/Drizzle (Fase 1).
+
+## ADR-006: `saldo` (não `situacao`) decide realizado vs. contratado
+Contexto: o texto de `situacao` retornado pela Olist não é um enum
+documentado publicamente, e os únicos valores confirmados em produção são
+`aberto`/`pago` — inferir buckets a partir do texto arriscaria classificar
+errado se a Olist introduzir uma variação. Decisão: `saldo == 0` decide
+`realizado`, `saldo > 0` decide `contratado`, para contas a receber e a
+pagar. `situacao` só é usado para exibição e para excluir `cancelado`
+(Fase 5).
