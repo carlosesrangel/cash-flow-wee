@@ -2,20 +2,9 @@
 
 import { useState } from 'react'
 import { formatBRL } from '@/lib/format/currency'
+import { formatDateOnlyBR } from '@/lib/format/date'
 import type { CashFlowDay } from '@/lib/cash-flow/aggregate'
 import type { CashFlowEntry } from '@/lib/cash-flow/engine'
-
-/**
- * Formats a bare `YYYY-MM-DD` calendar date as `DD/MM/YYYY` by rearranging
- * its parts directly — deliberately NOT `formatDateBR`, which parses the
- * string with `new Date()` (UTC midnight) and re-renders it in
- * America/Sao_Paulo, silently shifting the day backward. See
- * `lib/cash-flow/dates.ts`'s `toUtcDate` comment for the same failure mode.
- */
-function formatDayLabel(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-')
-  return `${day}/${month}/${year}`
-}
 
 export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: CashFlowEntry[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -51,7 +40,7 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                       onClick={() => setExpanded(isExpanded ? null : day.date)}
                       className="font-medium underline decoration-dotted"
                     >
-                      {formatDayLabel(day.date)}
+                      {formatDateOnlyBR(day.date)}
                     </button>
                   </td>
                   <td className="px-3 py-2">{day.saldoInicial != null ? formatBRL(day.saldoInicial) : '—'}</td>

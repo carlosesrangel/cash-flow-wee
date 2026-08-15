@@ -1,5 +1,5 @@
 import { formatBRL } from '@/lib/format/currency'
-import { formatDateBR } from '@/lib/format/date'
+import { formatDateOnlyBR } from '@/lib/format/date'
 import type { ClassifiedEntry } from '@/lib/cash-flow/classify'
 import { AGING_BUCKET_LABEL, type AgingBucket } from '@/lib/cash-flow/aging'
 
@@ -54,7 +54,7 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                 <tr key={row.id} className="border-b last:border-0">
                   <td className="px-3 py-2">{row.numeroDocumento ?? row.historico ?? '—'}</td>
                   <td className="px-3 py-2">{row.clienteNome ?? '—'}</td>
-                  <td className="px-3 py-2">{formatDateBR(classification.date)}</td>
+                  <td className="px-3 py-2">{formatDateOnlyBR(classification.date)}</td>
                   <td className="px-3 py-2">{row.valor != null ? formatBRL(row.valor) : '—'}</td>
                   <td className="px-3 py-2">{BUCKET_LABEL[classification.bucket]}</td>
                   <td className="px-3 py-2">{row.agingBucket ? AGING_BUCKET_LABEL[row.agingBucket] : '—'}</td>
