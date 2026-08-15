@@ -15,7 +15,7 @@ export async function POST(_request: Request, ctx: RouteContext<'/api/reconcilia
 
   const { data: match, error: matchError } = await admin
     .from('reconciliation_matches')
-    .select('id')
+    .select('id, status')
     .eq('id', id)
     .eq('org_id', member.orgId)
     .maybeSingle()
@@ -27,14 +27,16 @@ export async function POST(_request: Request, ctx: RouteContext<'/api/reconcilia
     return NextResponse.json({ error: 'Registro de reconciliação não encontrado' }, { status: 404 })
   }
 
+  const wasAutomatic = match.status === 'reconciliado_automaticamente'
+
   const { error: updateError } = await admin
     .from('reconciliation_matches')
     .update({
-      status: 'nao_reconciliado',
+      status: wasAutomatic ? 'rejeitado_manualmente' : 'nao_reconciliado',
       sumup_transaction_event_id: null,
       sumup_transaction_id: null,
-      resolved_by: null,
-      resolved_at: null,
+      resolved_by: wasAutomatic ? member.profileId : null,
+      resolved_at: wasAutomatic ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)

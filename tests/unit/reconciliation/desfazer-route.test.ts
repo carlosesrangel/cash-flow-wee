@@ -20,7 +20,10 @@ function ctx() {
   return { params: Promise.resolve({ id: MATCH_ID }) }
 }
 
-function mockAdmin(options: { match?: { id: string } | null; updateError?: { message: string } | null }) {
+function mockAdmin(options: {
+  match?: { id: string; status?: string } | null
+  updateError?: { message: string } | null
+}) {
   const matchMaybeSingle = vi.fn().mockResolvedValue({ data: options.match ?? null, error: null })
   const matchEq2 = vi.fn().mockReturnValue({ maybeSingle: matchMaybeSingle })
   const matchEq1 = vi.fn().mockReturnValue({ eq: matchEq2 })
@@ -72,10 +75,10 @@ describe('POST /api/reconciliacao/[id]/desfazer', () => {
     expect(response.status).toBe(404)
   })
 
-  it('resets the match to nao_reconciliado and returns ok', async () => {
+  it('resets the match to nao_reconciliado and returns ok when undoing a reconciliado_manualmente match', async () => {
     vi.mocked(getCurrentMember).mockResolvedValue(MEMBER as never)
     vi.mocked(canManageReconciliation).mockReturnValue(true)
-    const { update } = mockAdmin({ match: { id: MATCH_ID } })
+    const { update } = mockAdmin({ match: { id: MATCH_ID, status: 'reconciliado_manualmente' } })
 
     const { POST } = await import('@/app/api/reconciliacao/[id]/desfazer/route')
     const response = await POST(buildRequest(), ctx())
@@ -90,6 +93,39 @@ describe('POST /api/reconciliacao/[id]/desfazer', () => {
         resolved_by: null,
         resolved_at: null,
       })
+    )
+  })
+
+  it('rejects (rejeitado_manualmente) when undoing a reconciliado_automaticamente match, recording who rejected it', async () => {
+    vi.mocked(getCurrentMember).mockResolvedValue(MEMBER as never)
+    vi.mocked(canManageReconciliation).mockReturnValue(true)
+    const { update } = mockAdmin({ match: { id: MATCH_ID, status: 'reconciliado_automaticamente' } })
+
+    const { POST } = await import('@/app/api/reconciliacao/[id]/desfazer/route')
+    const response = await POST(buildRequest(), ctx())
+    const body = await response.json()
+
+    expect(body).toEqual({ ok: true })
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'rejeitado_manualmente',
+        sumup_transaction_event_id: null,
+        sumup_transaction_id: null,
+        resolved_by: 'profile-1',
+      })
+    )
+  })
+
+  it('resets to nao_reconciliado (not rejeitado_manualmente) when undoing a reconciliado_manualmente match', async () => {
+    vi.mocked(getCurrentMember).mockResolvedValue(MEMBER as never)
+    vi.mocked(canManageReconciliation).mockReturnValue(true)
+    const { update } = mockAdmin({ match: { id: MATCH_ID, status: 'reconciliado_manualmente' } })
+
+    const { POST } = await import('@/app/api/reconciliacao/[id]/desfazer/route')
+    await POST(buildRequest(), ctx())
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'nao_reconciliado', resolved_by: null })
     )
   })
 })
