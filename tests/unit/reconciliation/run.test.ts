@@ -37,6 +37,9 @@ type LinkedRow = { id: string; sumup_transaction_event_id: string; status: strin
  *   query.
  * - `eventRowsByArId` backs the per-AR-row candidate query, keyed by the AR
  *   row's `id`; each test picks the active set via `setEventRowsFor`.
+ * - `eventDetailsById` backs the duplicate-claim guard's per-event
+ *   `maybeSingle()` detail lookup (amount/date for the demoted row's
+ *   `match_reason.candidatos`), keyed by the event id.
  */
 function mockAdmin(options: {
   resolvedIds?: string[]
@@ -44,6 +47,7 @@ function mockAdmin(options: {
   strandedRows?: StrandedRow[]
   linkedRows?: LinkedRow[]
   eventRowsByArId?: Record<string, unknown[]>
+  eventDetailsById?: Record<string, unknown>
   upsertError?: { message: string } | null
 }) {
   const resolvedIds = options.resolvedIds ?? []
@@ -51,6 +55,7 @@ function mockAdmin(options: {
   const strandedRows = options.strandedRows ?? []
   const linkedRows = options.linkedRows ?? []
   const eventRowsByArId = options.eventRowsByArId ?? {}
+  const eventDetailsById = options.eventDetailsById ?? {}
   const upsert = vi.fn().mockResolvedValue({ error: options.upsertError ?? null })
 
   const gteCalls: Array<[string, unknown]> = []
@@ -137,8 +142,18 @@ function mockAdmin(options: {
     if (table === 'sumup_transaction_events') {
       // matchOne() issues no `.range()` on this query; the chain resolves the
       // active event fixture regardless of the (unused) default window.
+      // The guard's detail lookup shares this table but ends in `maybeSingle()`
+      // filtered by `id`, so it is served from `eventDetailsById` instead.
       const chain: Record<string, unknown> = {}
-      chain.eq = vi.fn().mockReturnValue(chain)
+      const eqCalls: Array<[string, unknown]> = []
+      chain.eq = vi.fn((column: string, value: unknown) => {
+        eqCalls.push([column, value])
+        return chain
+      })
+      chain.maybeSingle = vi.fn(() => {
+        const idCall = eqCalls.find(([column]) => column === 'id')
+        return Promise.resolve({ data: eventDetailsById[String(idCall?.[1])] ?? null, error: null })
+      })
       chain.gte = vi.fn((column: string, value: unknown) => {
         gteCalls.push([column, value])
         return chain
@@ -531,8 +546,19 @@ describe('runReconciliation — duplicate event claim guard', () => {
     vi.clearAllMocks()
   })
 
+  // 8092 / 10 = 809.20 gross per installment (same math the engine used to
+  // match in the first place — see computeGrossEstimate).
+  const sharedEventDetail = {
+    'event-shared': {
+      id: 'event-shared',
+      due_date: '2026-02-02',
+      sumup_transactions: { amount: 8092, installments_count: 10 },
+    },
+  }
+
   it('demotes the newer of two auto-matched rows claiming the same SumUp event to conflito', async () => {
     const { update, updateCalls, upsert } = mockAdmin({
+      eventDetailsById: sharedEventDetail,
       linkedRows: [
         {
           id: 'match-old',
@@ -561,9 +587,45 @@ describe('runReconciliation — duplicate event claim guard', () => {
       sumup_transaction_event_id: null,
       resolved_by: null,
       resolved_at: null,
-      match_reason: { motivo: 'evento_sumup_reivindicado_por_outra_parcela' },
+      match_reason: {
+        motivo: 'evento_sumup_reivindicado_por_outra_parcela',
+        candidatos: [
+          {
+            sumupTransactionEventId: 'event-shared',
+            valorBrutoSumupEstimado: 809.2,
+            dataVencimentoSumup: '2026-02-02',
+          },
+        ],
+      },
       candidate_ids: ['event-shared'],
       updated_at: expect.any(String),
+    })
+  })
+
+  it('omits candidatos (degrading to the raw id in the UI) when the event detail cannot be resolved', async () => {
+    const { updateCalls } = mockAdmin({
+      eventDetailsById: {},
+      linkedRows: [
+        {
+          id: 'match-old',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-new',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-02-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const { runReconciliation } = await import('@/lib/reconciliation/run')
+    await runReconciliation(ORG_ID)
+
+    expect(updateCalls[0].payload.match_reason).toEqual({
+      motivo: 'evento_sumup_reivindicado_por_outra_parcela',
     })
   })
 
@@ -591,6 +653,49 @@ describe('runReconciliation — duplicate event claim guard', () => {
     expect(update).toHaveBeenCalledTimes(1)
     expect(updateCalls[0].matchId).toBe('match-auto')
     expect(updateCalls[0].payload).toMatchObject({ status: 'conflito' })
+  })
+
+  it('keeps the earliest-created manual row when SEVERAL manual rows claim the same event, demoting the later manual row and every automatic row regardless of age', async () => {
+    const { update, updateCalls } = mockAdmin({
+      eventDetailsById: sharedEventDetail,
+      linkedRows: [
+        {
+          id: 'match-auto-oldest',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          // Created BEFORE both manual rows — "earliest wins" must not apply
+          // across the status boundary, only among the manual contenders.
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-manual-later',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_manualmente',
+          created_at: '2026-03-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-manual-earlier',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_manualmente',
+          created_at: '2026-02-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const { runReconciliation } = await import('@/lib/reconciliation/run')
+    await runReconciliation(ORG_ID)
+
+    expect(update).toHaveBeenCalledTimes(2)
+    expect(updateCalls.map((call) => call.matchId).sort()).toEqual(['match-auto-oldest', 'match-manual-later'])
+    for (const call of updateCalls) {
+      expect(call.payload).toMatchObject({
+        status: 'conflito',
+        sumup_transaction_event_id: null,
+        resolved_by: null,
+        resolved_at: null,
+        candidate_ids: ['event-shared'],
+      })
+    }
   })
 
   it('does not touch rows whose sumup_transaction_event_id is unique among resolved rows', async () => {

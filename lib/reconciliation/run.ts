@@ -13,7 +13,10 @@ import {
 // FK-repair pass and the duplicate-event-claim guard. Does NOT include
 // 'rejeitado_manualmente': a rejected row's FK is intentionally null and
 // must never be repaired or considered a claim.
-const LINKED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
+// Exported so the manual-confirm route can reject a write that would create
+// exactly the duplicate this guard exists to resolve (see
+// app/api/reconciliacao/[id]/confirmar/route.ts) — one definition, one meaning.
+export const LINKED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
 
 // Statuses that must never re-enter the matching engine's candidate pool —
 // broader than LINKED_STATUSES because it also covers the durable "no"
@@ -265,8 +268,14 @@ async function guardAgainstDuplicateEventClaims(admin: AdminClient, orgId: strin
     byEvent.set(row.sumup_transaction_event_id, group)
   }
 
-  for (const group of byEvent.values()) {
+  for (const [eventId, group] of byEvent.entries()) {
     if (group.length < 2) continue
+
+    // Fetched once per duplicated group (not per demoted row, and not joined
+    // into the read above): demotions are rare, so paying one extra query per
+    // affected event is far cheaper than embedding the event + transaction of
+    // every linked row in the org just to use it in this branch.
+    const candidatos = await loadCandidateDetail(admin, orgId, eventId)
 
     const manual = group.filter((row) => row.status === 'reconciliado_manualmente')
     const contenders = manual.length > 0 ? manual : group
@@ -285,7 +294,14 @@ async function guardAgainstDuplicateEventClaims(admin: AdminClient, orgId: strin
           sumup_transaction_event_id: null,
           resolved_by: null,
           resolved_at: null,
-          match_reason: { motivo: 'evento_sumup_reivindicado_por_outra_parcela' },
+          match_reason: {
+            motivo: 'evento_sumup_reivindicado_por_outra_parcela',
+            // Same shape `classifyCandidates` emits for a `conflito`, so the
+            // table's `candidateLabel` helper can render an amount/date instead
+            // of falling back to a raw event-id fragment. Omitted entirely when
+            // the detail can't be resolved — the UI degrades to the id.
+            ...(candidatos.length > 0 ? { candidatos } : {}),
+          },
           candidate_ids: [row.sumup_transaction_event_id],
           updated_at: new Date().toISOString(),
         })
@@ -296,6 +312,51 @@ async function guardAgainstDuplicateEventClaims(admin: AdminClient, orgId: strin
       }
     }
   }
+}
+
+/**
+ * Resolves the amount/date detail of a single SumUp event, shaped exactly like
+ * the `candidatos` entries `classifyCandidates` puts on a `conflito`'s
+ * `match_reason`. The gross estimate goes through the shared
+ * `computeGrossEstimate` so a demoted row shows the same number the engine
+ * compared against in the first place.
+ *
+ * Returns an empty array (never throws) when the event, its transaction, or
+ * any of the fields needed are missing: a missing label must not fail a whole
+ * reconciliation run.
+ */
+async function loadCandidateDetail(
+  admin: AdminClient,
+  orgId: string,
+  eventId: string
+): Promise<Array<{ sumupTransactionEventId: string; valorBrutoSumupEstimado: number; dataVencimentoSumup: string }>> {
+  const { data, error } = await admin
+    .from('sumup_transaction_events')
+    .select('id, due_date, sumup_transactions!inner(amount, installments_count)')
+    .eq('org_id', orgId)
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (error || !data) return []
+
+  const row = data as unknown as {
+    id: string
+    due_date: string | null
+    sumup_transactions: { amount: number | null; installments_count: number | null } | null
+  }
+  const transaction = row.sumup_transactions
+  if (!row.due_date || !transaction || transaction.amount === null || !transaction.installments_count) return []
+
+  const grossEstimate = computeGrossEstimate(transaction.amount, transaction.installments_count)
+  if (grossEstimate === null) return []
+
+  return [
+    {
+      sumupTransactionEventId: row.id,
+      valorBrutoSumupEstimado: grossEstimate,
+      dataVencimentoSumup: row.due_date,
+    },
+  ]
 }
 
 async function matchOne(admin: AdminClient, orgId: string, ar: AccountsReceivableRow) {

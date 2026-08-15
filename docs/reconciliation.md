@@ -44,15 +44,15 @@ como `failed`, mesmo que a sincronização em si tenha funcionado.
 ## Idempotência
 
 `reconciliation_matches` tem `unique (org_id, olist_accounts_receivable_id)`
-e o motor faz upsert. Uma parcela já resolvida (`reconciliado_automaticamente`
-ou `reconciliado_manualmente`) nunca é reprocessada em execuções seguintes —
-só parcelas ainda `nao_reconciliado`/`conflito` (ou sem registro algum) são
-reavaliadas.
+e o motor faz upsert. Uma parcela já resolvida (`reconciliado_automaticamente`,
+`reconciliado_manualmente` ou `rejeitado_manualmente`) nunca é reprocessada em
+execuções seguintes — só parcelas ainda `nao_reconciliado`/`conflito` (ou sem
+registro algum) são reavaliadas.
 
 ## Desfazer uma reconciliação e o status `rejeitado_manualmente`
 
-Quando um `OWNER_ADMIN` ou `MANAGER` desfaz (`POST /api/reconciliacao/desfazer`)
-uma reconciliação:
+Quando um `OWNER_ADMIN` ou `MANAGER` desfaz
+(`POST /api/reconciliacao/[id]/desfazer`) uma reconciliação:
 - Se a parcela estava `reconciliado_automaticamente`, ela passa para
   `rejeitado_manualmente` — um terminal que o motor nunca re-tenta, capturando
   a intenção humana de "esse match estava errado, não tente novamente".
@@ -66,10 +66,11 @@ chegou a `rejeitado_manualmente` uma vez, fica ali.
 
 ## Guarda de deduplicação: uma SumUp não pode ter dois matches
 
-Após executar o motor automático (ou após o usuário confirmar um match manual),
-uma passada de deduplicação (`lib/reconciliation/run.ts`, função
-`guardAgainstDuplicateEventClaims`) garante que nunhuma SumUp está apontada por
-duas parcelas Olist simultaneamente:
+A passada de deduplicação (`lib/reconciliation/run.ts`, função
+`guardAgainstDuplicateEventClaims`) roda **apenas como último passo de
+`runReconciliation`** — depois do motor automático e da passada de reparo de
+FKs, e nunca a partir da rota de confirmação manual. Ela garante que nenhuma
+SumUp está apontada por duas parcelas Olist simultaneamente:
 
 - Se dois matches tentam apontar para a mesma SumUp, o perdedor é rebaixado de
   `reconciliado_automaticamente`/`reconciliado_manualmente` para `conflito`.
@@ -81,16 +82,32 @@ duas parcelas Olist simultaneamente:
   parcela está `reconciliado_manualmente`, ela vence sobre qualquer match
   `reconciliado_automaticamente` também apontando para a mesma SumUp, sem
   importar timestamps. Assim, uma confirmação manual é definitiva até que o
-  usuário a desfaça explicitamente.
+  usuário a desfaça explicitamente. Se houver mais de uma linha
+  `reconciliado_manualmente` no mesmo grupo, o desempate ocorre **entre elas**
+  (a de criação mais antiga vence) e toda linha automática do grupo é rebaixada
+  independentemente da sua idade.
+
+### Segunda camada: a rota de confirmação também recusa um vínculo duplicado
+
+Como a linha rebaixada guarda em `candidate_ids` justamente o evento que a
+vencedora continua segurando, a UI oferece um botão "Confirmar" que
+recriaria a duplicidade. Por isso `POST /api/reconciliacao/[id]/confirmar`
+verifica, no momento da escrita, se o evento já pertence a outra linha em
+`reconciliado_automaticamente`/`reconciliado_manualmente` e responde `409`
+nesse caso. É um mecanismo independente e complementar — uma recusa na
+escrita, não uma execução da passada de deduplicação.
 
 ## Candidatos com detalhe de valor e data
 
 Quando o usuário vê a lista de candidatos em `/reconciliacao` para resolver um
-conflito, cada candidato agora carrega `amount` e `date` na estrutura
-`match_reason.candidatos` — permitindo mostrar na UI não apenas um ID de
-fragmento (`sumup_transaction_id`), mas também o valor e data da transação
-SumUp correspondente. Se o detalhe não estiver disponível (falha de sync ou
-dados ausentes), a exibição degrada graciosamente mostrando apenas o ID.
+conflito, cada candidato carrega `valorBrutoSumupEstimado` e
+`dataVencimentoSumup` na estrutura `match_reason.candidatos` — permitindo
+mostrar na UI não apenas um fragmento de ID (`sumup_transaction_event_id`), mas
+também o valor bruto estimado e a data de vencimento do evento SumUp
+correspondente. Vale tanto para conflitos gerados pelo motor
+(`classifyCandidates`) quanto para os gerados pelo rebaixamento da
+deduplicação. Se o detalhe não estiver disponível (falha de sync ou dados
+ausentes), a exibição degrada graciosamente mostrando apenas o ID.
 
 ## Teste de integração
 
@@ -104,10 +121,28 @@ npx supabase start
 npm run test:integration
 ```
 
-O test suite (`tests/integration/reconciliation.test.ts`) exercita o engine
-completo, executando syncs de Olist/SumUp contra fixtures carregadas no banco,
-validando que matches foram criados corretamente, e confirmando comportamentos
-de desfazer e deduplicação contra dados persistidos reais.
+O que `tests/integration/reconciliation.test.ts` realmente faz (ele **não**
+executa syncs de Olist/SumUp — insere as linhas de fixture diretamente no
+banco):
+
+1. Insere uma `sumup_transactions` + um `sumup_transaction_events` do tipo
+   `PAYOUT` e uma `olist_accounts_receivable` em cartão que casam entre si.
+2. Chama `runReconciliation` e verifica que a parcela ficou
+   `reconciliado_automaticamente` com o FK do evento preenchido.
+3. Chama `runReconciliation` de novo e verifica a idempotência (continua
+   exatamente uma linha, com o mesmo status).
+4. Força a linha de volta para `conflito` e exercita
+   `POST /api/reconciliacao/[id]/confirmar` contra o banco real (esse passo é
+   pulado se a instância local não tiver nenhum `profiles` para atribuir ao
+   `resolved_by`).
+
+Não há cobertura de desfazer nem da passada de deduplicação nessa suite — esses
+caminhos são cobertos pelos testes unitários em `tests/unit/reconciliation/`.
+
+Como a suite escreve com a service-role key (que ignora RLS) e
+`runReconciliation` pode rebaixar/atualizar linhas de toda a organização, o
+arquivo aborta imediatamente se `NEXT_PUBLIC_SUPABASE_URL` não apontar para um
+host local (`127.0.0.1`/`localhost`).
 
 ## Fora de escopo desta fase
 

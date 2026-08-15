@@ -5,6 +5,26 @@ vi.mock('@/lib/auth/session', () => ({ getCurrentMember: vi.fn() }))
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+// This suite MUTATES data (runReconciliation upserts/demotes rows for the whole
+// org, the confirm route writes) using the service-role key, which bypasses
+// RLS. Pointed at a shared or hosted project it would corrupt real
+// reconciliation state, so refuse to run anywhere but a local Supabase.
+const LOCAL_HOSTNAMES = ['127.0.0.1', 'localhost', '::1', '[::1]']
+const hostname = (() => {
+  try {
+    return new URL(url ?? '').hostname
+  } catch {
+    return null
+  }
+})()
+if (!hostname || !LOCAL_HOSTNAMES.includes(hostname)) {
+  throw new Error(
+    `Refusing to run the integration suite against a non-local Supabase (NEXT_PUBLIC_SUPABASE_URL host: ${hostname ?? '<unset/invalid>'}). ` +
+      `Point .env.local at a local instance (npx supabase start) before running npm run test:integration.`
+  )
+}
+
 const admin = createClient(url, serviceKey)
 
 // Fixed local seed org — see supabase/seed.sql.

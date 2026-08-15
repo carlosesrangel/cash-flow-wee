@@ -167,11 +167,15 @@
 - **Nenhuma evidência de produção end-to-end ainda**: assim como as Fases
   2/3 na sua entrega inicial, o motor foi validado com fixtures
   determinísticas, não contra um sync completo real com dados que
-  efetivamente casam. **Resolvido por:** a suite de integração
+  efetivamente casam. **Parcialmente atenuado por:** a suite de integração
   (`tests/integration/reconciliation.test.ts`, executada via `npm run
-  test:integration`) agora exercita o motor contra um banco Postgres real,
-  validando matches, desfazer, deduplicação e confirmação manual ponta a
-  ponta. Ao depurar um caso real de `conflito` ou `nao_reconciliado`
+  test:integration`) exercita o motor contra um banco Postgres real —
+  inserindo linhas de fixture diretamente (não via sync de Olist/SumUp),
+  validando o match automático, a idempotência de duas execuções seguidas de
+  `runReconciliation` e a rota de confirmação manual. **Ainda não coberto por
+  ela:** desfazer, a passada de deduplicação, e qualquer sync real ponta a
+  ponta — esses continuam validados apenas por testes unitários com fixtures.
+  Ao depurar um caso real de `conflito` ou `nao_reconciliado`
   inesperado, comece pelos dados reais em
   `olist_accounts_receivable`/`sumup_transaction_events` no Supabase
   Studio antes de assumir um bug no algoritmo.
