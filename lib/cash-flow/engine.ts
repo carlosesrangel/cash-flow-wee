@@ -208,20 +208,21 @@ export async function resolveOpeningBalance(
     ((snapshot.cash_on_hand as number | null) ?? 0) +
     ((snapshot.liquid_investments as number | null) ?? 0)
 
-  const { data: adjustments, error: adjustmentsError } = await admin
-    .from('manual_cash_entries')
-    .select('amount')
-    .eq('org_id', orgId)
-    .eq('type', 'ajuste_saldo')
-    .is('deleted_at', null)
-    .gt('entry_date', referenceDate)
-    .lt('entry_date', date)
+  const adjustments = await fetchAllPages<{ amount: number }>(
+    (from, to) =>
+      admin
+        .from('manual_cash_entries')
+        .select('amount')
+        .eq('org_id', orgId)
+        .eq('type', 'ajuste_saldo')
+        .is('deleted_at', null)
+        .gt('entry_date', referenceDate)
+        .lt('entry_date', date)
+        .range(from, to),
+    'Failed to load ajuste_saldo entries'
+  )
 
-  if (adjustmentsError) {
-    throw new Error(`Failed to load ajuste_saldo entries: ${adjustmentsError.message}`)
-  }
-
-  const adjustmentTotal = (adjustments ?? []).reduce((sum, row) => sum + (row.amount as number), 0)
+  const adjustmentTotal = adjustments.reduce((sum, row) => sum + row.amount, 0)
 
   return { balance: baseBalance + adjustmentTotal, asOf: referenceDate }
 }

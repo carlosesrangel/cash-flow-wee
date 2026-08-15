@@ -51,8 +51,11 @@ function mockAdmin(options: {
   // The `manual_cash_entries` table is queried two different ways by
   // engine.ts: `loadManualEntries` pages through it (.eq/.is/.in/.range/.then)
   // while `resolveOpeningBalance` filters ajuste_saldo rows by date range
-  // (.eq/.is/.gt/.lt resolving directly). Both shapes have to be served off
-  // the same chain object since both call `admin.from('manual_cash_entries')`.
+  // (.eq/.is/.gt/.lt/.range/.then). Both shapes have to be served off the
+  // same chain object since both call `admin.from('manual_cash_entries')`;
+  // `.gt`/`.lt` hand off to their own pageable chain (mirroring
+  // `makePageableChain`) so `resolveOpeningBalance`'s `fetchAllPages` call
+  // pages through `adjustmentRows` exactly like the other reads.
   const from = vi.fn((table: string) => {
     if (table === 'olist_accounts_receivable') return { select: vi.fn(() => makePageableChain(arRows)) }
     if (table === 'olist_accounts_payable') return { select: vi.fn(() => makePageableChain(apRows)) }
@@ -61,7 +64,7 @@ function mockAdmin(options: {
         select: vi.fn(() => {
           const chain = makePageableChain(manualRows)
           chain.gt = vi.fn(() => ({
-            lt: vi.fn(() => Promise.resolve({ data: adjustmentRows, error: null })),
+            lt: vi.fn(() => makePageableChain(adjustmentRows)),
           }))
           return chain
         }),
