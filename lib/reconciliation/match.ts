@@ -83,6 +83,14 @@ export function classifyCandidates(arValor: number, candidates: MatchCandidate[]
   return {
     status: 'conflito',
     candidateIds: candidates.map((candidate) => candidate.sumupTransactionEventId),
-    matchReason: { motivo: 'multiplos_candidatos', candidatosAvaliados: candidates.length },
+    matchReason: {
+      motivo: 'multiplos_candidatos',
+      candidatosAvaliados: candidates.length,
+      candidatos: candidates.map((candidate) => ({
+        sumupTransactionEventId: candidate.sumupTransactionEventId,
+        valorBrutoSumupEstimado: candidate.grossEstimate,
+        dataVencimentoSumup: candidate.dueDate,
+      })),
+    },
   }
 }

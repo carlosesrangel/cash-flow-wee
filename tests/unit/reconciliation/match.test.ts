@@ -100,6 +100,18 @@ describe('classifyCandidates', () => {
     expect(result.status).toBe('conflito')
     expect(result.status === 'conflito' && result.candidateIds).toEqual(['event-1', 'event-2'])
   })
+
+  it('includes each candidate\'s amount and due date in matchReason for a conflito result', () => {
+    const result = classifyCandidates(380, [
+      candidate({ sumupTransactionEventId: 'event-1', grossEstimate: 379.98, dueDate: '2026-02-02' }),
+      candidate({ sumupTransactionEventId: 'event-2', grossEstimate: 380.02, dueDate: '2026-02-03' }),
+    ])
+    expect(result.status).toBe('conflito')
+    expect(result.status === 'conflito' && result.matchReason.candidatos).toEqual([
+      { sumupTransactionEventId: 'event-1', valorBrutoSumupEstimado: 379.98, dataVencimentoSumup: '2026-02-02' },
+      { sumupTransactionEventId: 'event-2', valorBrutoSumupEstimado: 380.02, dataVencimentoSumup: '2026-02-03' },
+    ])
+  })
 })
 
 describe('CARD_PAYMENT_METHODS', () => {
