@@ -49,6 +49,65 @@ ou `reconciliado_manualmente`) nunca é reprocessada em execuções seguintes �
 só parcelas ainda `nao_reconciliado`/`conflito` (ou sem registro algum) são
 reavaliadas.
 
+## Desfazer uma reconciliação e o status `rejeitado_manualmente`
+
+Quando um `OWNER_ADMIN` ou `MANAGER` desfaz (`POST /api/reconciliacao/desfazer`)
+uma reconciliação:
+- Se a parcela estava `reconciliado_automaticamente`, ela passa para
+  `rejeitado_manualmente` — um terminal que o motor nunca re-tenta, capturando
+  a intenção humana de "esse match estava errado, não tente novamente".
+- Se a parcela estava `reconciliado_manualmente` (resultado de um "Confirmar"
+  manual na tela de conflito), ela volta para `nao_reconciliado`, permitindo
+  re-matching futuro — esse é o comportamento original e inalterado.
+
+O status `rejeitado_manualmente` aparece explicitamente em `reconciliation_matches`
+e é consultado pelo motor antes de tentar um novo match — se uma parcela já
+chegou a `rejeitado_manualmente` uma vez, fica ali.
+
+## Guarda de deduplicação: uma SumUp não pode ter dois matches
+
+Após executar o motor automático (ou após o usuário confirmar um match manual),
+uma passada de deduplicação (`lib/reconciliation/dedup.ts`) garante que nunhuma
+SumUp está apontada por duas parcelas Olist simultaneamente:
+
+- Se dois matches tentam apontar para a mesma SumUp, o perdedor é rebaixado de
+  `reconciliado_automaticamente`/`reconciliado_manualmente` para `conflito`.
+- Em caso de empate automático (ambos `reconciliado_automaticamente`), a
+  deduplicação preserva o match de **criação mais antiga**, descartando o mais
+  recente — a ideia é que o primeiro match que "pegou" a SumUp tinha mais
+  chance de ser correto.
+- A regra de desempate **nunca** sobrescreve uma resolução manual: se uma
+  parcela está `reconciliado_manualmente`, ela vence sobre qualquer match
+  `reconciliado_automaticamente` também apontando para a mesma SumUp, sem
+  importar timestamps. Assim, uma confirmação manual é definitiva até que o
+  usuário a desfaça explicitamente.
+
+## Candidatos com detalhe de valor e data
+
+Quando o usuário vê a lista de candidatos em `/reconciliacao` para resolver um
+conflito, cada candidato agora carrega `amount` e `date` na estrutura
+`match_reason.candidatos` — permitindo mostrar na UI não apenas um ID de
+fragmento (`sumup_transaction_id`), mas também o valor e data da transação
+SumUp correspondente. Se o detalhe não estiver disponível (falha de sync ou
+dados ausentes), a exibição degrada graciosamente mostrando apenas o ID.
+
+## Teste de integração
+
+Para validar o motor contra um banco Postgres real (não apenas fixtures):
+
+```bash
+# Inicia um Supabase local (se ainda não estiver rodando)
+npx supabase start
+
+# Executa a suite de integração
+npm run test:integration
+```
+
+O test suite (`tests/integration/reconciliation.ts`) exercita o engine completo,
+executando syncs de Olist/SumUp contra fixtures carregadas no banco, validando
+que matches foram criados corretamente, e confirmando comportamentos de
+desfazer e deduplicação contra dados persistidos reais.
+
 ## Fora de escopo desta fase
 
 Ver a seção "Fora de escopo" da spec: motor de taxas históricas (Fase 6),
