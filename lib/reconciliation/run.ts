@@ -5,11 +5,11 @@ import {
   withinAmountTolerance,
   withinDateWindow,
   classifyCandidates,
+  CARD_PAYMENT_METHODS,
   type MatchCandidate,
 } from '@/lib/reconciliation/match'
 
 const RESOLVED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
-const CARD_PAYMENT_METHODS = ['Cartão de crédito', 'Cartão de débito']
 const DATE_WINDOW_DAYS = 5
 /**
  * Supabase's hosted PostgREST caps a single response (commonly 1000 rows), so

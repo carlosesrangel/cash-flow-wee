@@ -6,6 +6,7 @@ import {
   withinAmountTolerance,
   withinDateWindow,
   classifyCandidates,
+  CARD_PAYMENT_METHODS,
   type MatchCandidate,
 } from '@/lib/reconciliation/match'
 
@@ -98,5 +99,11 @@ describe('classifyCandidates', () => {
     ])
     expect(result.status).toBe('conflito')
     expect(result.status === 'conflito' && result.candidateIds).toEqual(['event-1', 'event-2'])
+  })
+})
+
+describe('CARD_PAYMENT_METHODS', () => {
+  it('is the exact list isCardPaymentMethod checks against', () => {
+    expect(CARD_PAYMENT_METHODS).toEqual(['Cartão de crédito', 'Cartão de débito'])
   })
 })

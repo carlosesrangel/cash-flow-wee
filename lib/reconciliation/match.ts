@@ -1,6 +1,6 @@
 const AMOUNT_TOLERANCE = 0.05
 const DATE_WINDOW_DAYS = 5
-const CARD_PAYMENT_METHODS = ['Cartão de crédito', 'Cartão de débito']
+export const CARD_PAYMENT_METHODS = ['Cartão de crédito', 'Cartão de débito'] as const
 
 export function isCardPaymentMethod(formaRecebimentoNome: string | null): boolean {
   return formaRecebimentoNome !== null && CARD_PAYMENT_METHODS.includes(formaRecebimentoNome)
