@@ -18,6 +18,8 @@ type ArRow = {
 
 type StrandedRow = { id: string; olist_accounts_receivable_id: string }
 
+type LinkedRow = { id: string; sumup_transaction_event_id: string; status: string; created_at: string }
+
 /**
  * Builds a fake admin client whose `.from(table)` branches by table name.
  *
@@ -30,6 +32,9 @@ type StrandedRow = { id: string; olist_accounts_receivable_id: string }
  *   `maybeSingle()` lookup).
  * - `strandedRows` backs the repair pass's
  *   `is('sumup_transaction_event_id', null)` query.
+ * - `linkedRows` backs the duplicate-event-claim guard's
+ *   `in('status', LINKED_STATUSES).not('sumup_transaction_event_id', 'is', null)`
+ *   query.
  * - `eventRowsByArId` backs the per-AR-row candidate query, keyed by the AR
  *   row's `id`; each test picks the active set via `setEventRowsFor`.
  */
@@ -37,12 +42,14 @@ function mockAdmin(options: {
   resolvedIds?: string[]
   arRows?: ArRow[]
   strandedRows?: StrandedRow[]
+  linkedRows?: LinkedRow[]
   eventRowsByArId?: Record<string, unknown[]>
   upsertError?: { message: string } | null
 }) {
   const resolvedIds = options.resolvedIds ?? []
   const arRows = options.arRows ?? []
   const strandedRows = options.strandedRows ?? []
+  const linkedRows = options.linkedRows ?? []
   const eventRowsByArId = options.eventRowsByArId ?? {}
   const upsert = vi.fn().mockResolvedValue({ error: options.upsertError ?? null })
 
@@ -114,9 +121,11 @@ function mockAdmin(options: {
         select: vi.fn((columns: string) =>
           columns.includes('id, olist_accounts_receivable_id')
             ? makePageableChain('reconciliation_matches:stranded', () => strandedRows)
-            : makePageableChain('reconciliation_matches:resolved', () =>
-                resolvedIds.map((id) => ({ olist_accounts_receivable_id: id }))
-              )
+            : columns.includes('sumup_transaction_event_id')
+              ? makePageableChain('reconciliation_matches:linked', () => linkedRows)
+              : makePageableChain('reconciliation_matches:resolved', () =>
+                  resolvedIds.map((id) => ({ olist_accounts_receivable_id: id }))
+                )
         ),
         upsert,
         update,
@@ -513,5 +522,98 @@ describe('runReconciliation', () => {
     expect(result.processed).toBe(0)
     expect(update).not.toHaveBeenCalled()
     expect(upsert).not.toHaveBeenCalled()
+  })
+})
+
+describe('runReconciliation — duplicate event claim guard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it('demotes the newer of two auto-matched rows claiming the same SumUp event to conflito', async () => {
+    const { update, updateCalls, upsert } = mockAdmin({
+      linkedRows: [
+        {
+          id: 'match-old',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-new',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-02-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const { runReconciliation } = await import('@/lib/reconciliation/run')
+    await runReconciliation(ORG_ID)
+
+    expect(upsert).not.toHaveBeenCalled()
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(updateCalls[0].matchId).toBe('match-new')
+    expect(updateCalls[0].payload).toEqual({
+      status: 'conflito',
+      sumup_transaction_id: null,
+      sumup_transaction_event_id: null,
+      resolved_by: null,
+      resolved_at: null,
+      match_reason: { motivo: 'evento_sumup_reivindicado_por_outra_parcela' },
+      candidate_ids: ['event-shared'],
+      updated_at: expect.any(String),
+    })
+  })
+
+  it('keeps a reconciliado_manualmente row over a reconciliado_automaticamente row claiming the same event, regardless of creation order', async () => {
+    const { update, updateCalls } = mockAdmin({
+      linkedRows: [
+        {
+          id: 'match-auto',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-manual',
+          sumup_transaction_event_id: 'event-shared',
+          status: 'reconciliado_manualmente',
+          created_at: '2026-02-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const { runReconciliation } = await import('@/lib/reconciliation/run')
+    await runReconciliation(ORG_ID)
+
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(updateCalls[0].matchId).toBe('match-auto')
+    expect(updateCalls[0].payload).toMatchObject({ status: 'conflito' })
+  })
+
+  it('does not touch rows whose sumup_transaction_event_id is unique among resolved rows', async () => {
+    const { update } = mockAdmin({
+      linkedRows: [
+        {
+          id: 'match-a',
+          sumup_transaction_event_id: 'event-a',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'match-b',
+          sumup_transaction_event_id: 'event-b',
+          status: 'reconciliado_automaticamente',
+          created_at: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const { runReconciliation } = await import('@/lib/reconciliation/run')
+    await runReconciliation(ORG_ID)
+
+    expect(update).not.toHaveBeenCalled()
   })
 })

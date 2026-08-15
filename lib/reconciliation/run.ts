@@ -9,7 +9,16 @@ import {
   type MatchCandidate,
 } from '@/lib/reconciliation/match'
 
-const RESOLVED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
+// Statuses that hold (or should hold) a real SumUp FK — eligible for the
+// FK-repair pass and the duplicate-event-claim guard. Does NOT include
+// 'rejeitado_manualmente': a rejected row's FK is intentionally null and
+// must never be repaired or considered a claim.
+const LINKED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente']
+
+// Statuses that must never re-enter the matching engine's candidate pool —
+// broader than LINKED_STATUSES because it also covers the durable "no"
+// (rejeitado_manualmente).
+const RESOLVED_STATUSES = ['reconciliado_automaticamente', 'reconciliado_manualmente', 'rejeitado_manualmente']
 const DATE_WINDOW_DAYS = 5
 /**
  * Supabase's hosted PostgREST caps a single response (commonly 1000 rows), so
@@ -156,6 +165,7 @@ export async function runReconciliation(orgId: string): Promise<{ processed: num
   }
 
   await repairStrandedMatches(admin, orgId)
+  await guardAgainstDuplicateEventClaims(admin, orgId)
 
   return { processed }
 }
@@ -180,7 +190,7 @@ async function repairStrandedMatches(admin: AdminClient, orgId: string): Promise
         .from('reconciliation_matches')
         .select('id, olist_accounts_receivable_id')
         .eq('org_id', orgId)
-        .in('status', RESOLVED_STATUSES)
+        .in('status', LINKED_STATUSES)
         .is('sumup_transaction_event_id', null)
         .range(from, to),
     'Failed to load stranded reconciliation_matches'
@@ -215,6 +225,75 @@ async function repairStrandedMatches(admin: AdminClient, orgId: string): Promise
 
     if (updateError) {
       throw new Error(`Failed to re-link reconciliation_matches ${stranded.id}: ${updateError.message}`)
+    }
+  }
+}
+
+/**
+ * Two AR installments can end up claiming the same SumUp event across
+ * separate runs (e.g. a repair-pass re-link happens to pick the same event
+ * another row already holds). This is exactly the double-count the phase
+ * exists to prevent, so after every run, any event claimed by more than one
+ * `LINKED_STATUSES` row gets down to one legitimate claimant: prefer a
+ * manual resolution over an automatic one (a human decision outranks the
+ * engine's guess); among a tie, the earliest-created row wins. Every other
+ * claimant in the group is demoted to `conflito`, cleared of its FK and
+ * resolution fields, so a human can review it.
+ */
+async function guardAgainstDuplicateEventClaims(admin: AdminClient, orgId: string): Promise<void> {
+  const linkedRows = await fetchAllPages<{
+    id: string
+    sumup_transaction_event_id: string
+    status: string
+    created_at: string
+  }>(
+    (from, to) =>
+      admin
+        .from('reconciliation_matches')
+        .select('id, sumup_transaction_event_id, status, created_at')
+        .eq('org_id', orgId)
+        .in('status', LINKED_STATUSES)
+        .not('sumup_transaction_event_id', 'is', null)
+        .range(from, to),
+    'Failed to load linked reconciliation_matches for duplicate-claim check'
+  )
+
+  const byEvent = new Map<string, typeof linkedRows>()
+  for (const row of linkedRows) {
+    const group = byEvent.get(row.sumup_transaction_event_id) ?? []
+    group.push(row)
+    byEvent.set(row.sumup_transaction_event_id, group)
+  }
+
+  for (const group of byEvent.values()) {
+    if (group.length < 2) continue
+
+    const manual = group.filter((row) => row.status === 'reconciliado_manualmente')
+    const contenders = manual.length > 0 ? manual : group
+    const winner = contenders.reduce((earliest, row) =>
+      row.created_at < earliest.created_at ? row : earliest
+    )
+
+    for (const row of group) {
+      if (row.id === winner.id) continue
+
+      const { error } = await admin
+        .from('reconciliation_matches')
+        .update({
+          status: 'conflito',
+          sumup_transaction_id: null,
+          sumup_transaction_event_id: null,
+          resolved_by: null,
+          resolved_at: null,
+          match_reason: { motivo: 'evento_sumup_reivindicado_por_outra_parcela' },
+          candidate_ids: [row.sumup_transaction_event_id],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id)
+
+      if (error) {
+        throw new Error(`Failed to demote duplicate-claim reconciliation_matches ${row.id}: ${error.message}`)
+      }
     }
   }
 }
