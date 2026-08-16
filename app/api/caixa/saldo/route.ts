@@ -38,7 +38,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
 
-  await admin.from('audit_logs').insert({
+  // The snapshot is already committed at this point, so a failed audit write
+  // must not fail the request — but it must not vanish either: an untraceable
+  // financial write is exactly what audit_logs exists to prevent.
+  const { error: auditError } = await admin.from('audit_logs').insert({
     org_id: member.orgId,
     actor_profile_id: member.profileId,
     action: 'cash_balance_snapshot_created',
@@ -46,6 +49,9 @@ export async function POST(request: Request) {
     entity_id: snapshot.id,
     after: input,
   })
+  if (auditError) {
+    console.error('Failed to write audit_logs for cash_balance_snapshot_created:', auditError.message)
+  }
 
   return NextResponse.json({ ok: true })
 }
