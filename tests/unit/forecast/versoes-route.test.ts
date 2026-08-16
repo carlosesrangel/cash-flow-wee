@@ -79,4 +79,32 @@ describe('POST /api/forecast/versoes', () => {
       expect.objectContaining({ org_id: ORG_ID, actor_profile_id: 'profile-1', action: 'forecast_version_created' })
     )
   })
+
+  it('still returns ok when audit log insert fails', async () => {
+    vi.mocked(getCurrentMember).mockResolvedValue(MEMBER as never)
+    vi.mocked(canEditForecast).mockReturnValue(true)
+    vi.mocked(createForecastVersion).mockResolvedValue({
+      id: 'v-3',
+      name: 'Forecast Setembro 2026',
+      createdAt: '2026-08-02T00:00:00Z',
+    })
+    const auditInsert = vi.fn().mockResolvedValue({ error: { message: 'Database error' } })
+    const from = vi.fn((table: string) => {
+      if (table === 'audit_logs') return { insert: auditInsert }
+      throw new Error(`unexpected table ${table}`)
+    })
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const { POST } = await import('@/app/api/forecast/versoes/route')
+    const response = await POST(buildRequest({ name: 'Forecast Setembro 2026' }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ ok: true, version: { id: 'v-3', name: 'Forecast Setembro 2026', createdAt: '2026-08-02T00:00:00Z' } })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to write audit_logs for forecast_version_created:',
+      'Database error'
+    )
+  })
 })
