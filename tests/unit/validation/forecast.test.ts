@@ -7,7 +7,7 @@ import {
 } from '@/lib/validation/forecast'
 
 describe('updateForecastEntrySchema', () => {
-  const valid = { versionId: '00000000-0000-0000-0000-000000000002', ano: 2026, mes: 8, receita: 1000 }
+  const valid = { versionId: '00000000-0000-4000-8000-000000000002', ano: 2026, mes: 8, receita: 1000 }
 
   it('accepts a valid entry with optional cenario/comentario', () => {
     expect(updateForecastEntrySchema.safeParse({ ...valid, cenario: 'Base', comentario: 'Ajuste' }).success).toBe(true)
@@ -49,7 +49,7 @@ describe('createForecastScenarioSchema', () => {
     expect(
       createForecastScenarioSchema.safeParse({
         name: 'Pessimista',
-        duplicateFromScenarioId: '00000000-0000-0000-0000-000000000003',
+        duplicateFromScenarioId: '00000000-0000-4000-8000-000000000003',
       }).success
     ).toBe(true)
   })
@@ -60,7 +60,7 @@ describe('createForecastScenarioSchema', () => {
 })
 
 describe('updateScenarioMultiplierSchema', () => {
-  const valid = { scenarioId: '00000000-0000-0000-0000-000000000004', ano: 2026, mes: 8, percentual: 85 }
+  const valid = { scenarioId: '00000000-0000-4000-8000-000000000004', ano: 2026, mes: 8, percentual: 85 }
 
   it('accepts a valid multiplier', () => {
     expect(updateScenarioMultiplierSchema.safeParse(valid).success).toBe(true)

@@ -1,9 +1,7 @@
 import { z } from 'zod'
 
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export const updateForecastEntrySchema = z.object({
-  versionId: z.string().regex(uuidRegex, 'UUID inválido'),
+  versionId: z.string().uuid(),
   ano: z.number().int().min(2000).max(2100),
   mes: z.number().int().min(1).max(12),
   receita: z.number().min(0),
@@ -17,11 +15,11 @@ export const createForecastVersionSchema = z.object({
 
 export const createForecastScenarioSchema = z.object({
   name: z.string().min(1, 'Nome obrigatório').max(200),
-  duplicateFromScenarioId: z.string().regex(uuidRegex, 'UUID inválido').optional(),
+  duplicateFromScenarioId: z.string().uuid().optional(),
 })
 
 export const updateScenarioMultiplierSchema = z.object({
-  scenarioId: z.string().regex(uuidRegex, 'UUID inválido'),
+  scenarioId: z.string().uuid(),
   ano: z.number().int().min(2000).max(2100),
   mes: z.number().int().min(1).max(12),
   percentual: z.number().min(0),
