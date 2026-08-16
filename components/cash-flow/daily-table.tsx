@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
 import type { CashFlowDay } from '@/lib/cash-flow/aggregate'
@@ -32,8 +32,8 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
             const totalSaidas = day.saidas.realizado + day.saidas.contratado
             const isExpanded = expanded === day.date
             return (
-              <>
-                <tr key={day.date} className="border-b last:border-0">
+              <Fragment key={day.date}>
+                <tr className="border-b last:border-0">
                   <td className="px-3 py-2">
                     <button
                       type="button"
@@ -49,7 +49,7 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                   <td className="px-3 py-2 font-medium">{day.saldoFinal != null ? formatBRL(day.saldoFinal) : '—'}</td>
                 </tr>
                 {isExpanded && (
-                  <tr key={`${day.date}-detail`} className="border-b bg-neutral-50 last:border-0">
+                  <tr className="border-b bg-neutral-50 last:border-0">
                     <td colSpan={5} className="px-3 py-2">
                       {dayEntries.length === 0 ? (
                         <p className="text-neutral-500">Nenhum lançamento neste dia.</p>
@@ -74,7 +74,7 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             )
           })}
         </tbody>
