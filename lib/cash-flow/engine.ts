@@ -179,12 +179,23 @@ export async function loadCashFlowEntries(orgId: string): Promise<CashFlowEntry[
  * Resolves the confirmed cash balance to use as the opening balance for
  * `date`: the most recent `cash_balance_snapshots` row strictly before
  * `date`, plus any `ajuste_saldo` manual entries dated strictly between that
- * snapshot and `date`. Returns null when no snapshot exists yet — the
+ * snapshot and `date`, plus every `realizado`-bucket entry (already-settled
+ * AR/AP and manual entrada/saida) from `entries` dated in that same gap —
+ * those represent cash that actually moved after the snapshot was taken and
+ * must be carried forward, otherwise the opening balance is off by exactly
+ * whatever moved between the snapshot and `date`. `contratado` entries are
+ * deliberately excluded: they are unrealized and would blend a projection
+ * into a confirmed balance. Returns null when no snapshot exists yet — the
  * caller (`aggregateByDay`) must not fabricate a starting balance.
+ *
+ * When two snapshots share the same `reference_date` (the table has no
+ * uniqueness constraint on it — re-recording the same day is the obvious
+ * case), the most recently created one wins.
  */
 export async function resolveOpeningBalance(
   orgId: string,
-  date: string
+  date: string,
+  entries: CashFlowEntry[]
 ): Promise<{ balance: number; asOf: string } | null> {
   const admin = createAdminSupabaseClient()
 
@@ -194,6 +205,7 @@ export async function resolveOpeningBalance(
     .eq('org_id', orgId)
     .lt('reference_date', date)
     .order('reference_date', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -224,5 +236,13 @@ export async function resolveOpeningBalance(
 
   const adjustmentTotal = adjustments.reduce((sum, row) => sum + row.amount, 0)
 
-  return { balance: baseBalance + adjustmentTotal, asOf: referenceDate }
+  // realizado entries (already-settled AR/AP + manual entrada/saida) dated in
+  // the same gap represent cash that actually moved and must not be dropped
+  // — only ajuste_saldo was being counted before, silently undercounting or
+  // overcounting every page's opening balance by whatever moved in the gap.
+  const realizadoSinceSnapshot = entries
+    .filter((entry) => entry.bucket === 'realizado' && entry.date > referenceDate && entry.date < date)
+    .reduce((sum, entry) => sum + (entry.direction === 'entrada' ? entry.amount : -entry.amount), 0)
+
+  return { balance: baseBalance + adjustmentTotal + realizadoSinceSnapshot, asOf: referenceDate }
 }

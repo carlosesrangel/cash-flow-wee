@@ -15,10 +15,8 @@ export default async function FluxoDeCaixaDiarioPage() {
   const from = shiftDateString(today, -30)
   const to = shiftDateString(today, 90)
 
-  const [entries, opening] = await Promise.all([
-    loadCashFlowEntries(member.orgId),
-    resolveOpeningBalance(member.orgId, from),
-  ])
+  const entries = await loadCashFlowEntries(member.orgId)
+  const opening = await resolveOpeningBalance(member.orgId, from, entries)
   const days = aggregateByDay(entries, { from, to }, opening)
 
   return (

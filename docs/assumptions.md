@@ -214,3 +214,22 @@
   pagamento parcial, confirmar que o comportamento observado bate com o
   esperado antes de assumir que o código está correto só porque os testes
   unitários passam.
+- **Um snapshot com `reference_date` dentro de uma janela já exibida não
+  re-ancora o rollforward daquela janela**: `resolveOpeningBalance`
+  (`lib/cash-flow/engine.ts`) escolhe um único snapshot — o mais recente em
+  ou antes do início da janela (ou, no card "Saldo de Caixa Atual" da Visão
+  Geral, em ou antes de hoje) — e `aggregateByDay`
+  (`lib/cash-flow/aggregate.ts`) compõe todos os dias seguintes a partir
+  desse único ponto de partida. Cenário concreto: a página Anual mostra
+  01/01 a 31/12 e o usuário registra em 01/10 um novo snapshot com o saldo
+  bancário conferido; os dias a partir de 01/10 continuam sendo o
+  rollforward acumulado desde o snapshot de janeiro, e não são reancorados
+  no snapshot de outubro. Mitigado em parte: o snapshot mais recente é
+  sempre usado assim que a janela exibida começa depois dele (ex.: no dia
+  seguinte, a Visão Geral já ancora no snapshot novo), e a continuidade
+  `realizado` + `ajuste_saldo` desde o snapshot escolhido é somada
+  corretamente. Não mitigado: divergências acumuladas que o snapshot novo
+  corrigiria continuam visíveis no restante da janela já aberta. Corrigir
+  de verdade exige rodar o rollforward por trecho entre snapshots ou fazer
+  `aggregateByDay` aceitar múltiplas âncoras — adiado por ser maior que uma
+  rodada de correção.

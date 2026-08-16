@@ -3,6 +3,26 @@ import { createClient } from '@supabase/supabase-js'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+// This suite MUTATES data (it inserts AR/AP, manual entries and balance
+// snapshots and DELETEs them again) using the service-role key, which bypasses
+// RLS. Pointed at a shared or hosted project it would destroy real financial
+// rows, so refuse to run anywhere but a local Supabase.
+const LOCAL_HOSTNAMES = ['127.0.0.1', 'localhost', '::1', '[::1]']
+const hostname = (() => {
+  try {
+    return new URL(url ?? '').hostname
+  } catch {
+    return null
+  }
+})()
+if (!hostname || !LOCAL_HOSTNAMES.includes(hostname)) {
+  throw new Error(
+    `Refusing to run the cash flow integration suite against a non-local Supabase (NEXT_PUBLIC_SUPABASE_URL host: ${hostname ?? '<unset/invalid>'}). ` +
+      `Point .env.local at a local instance (npx supabase start) before running npm run test:integration.`
+  )
+}
+
 const admin = createClient(url, serviceKey)
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
@@ -70,7 +90,12 @@ describe('cash flow engine — real database integration', () => {
     const fixtureEntries = entries.filter((e) => e.sourceId && (e.description ?? '').startsWith(FIXTURE_PREFIX))
     expect(fixtureEntries).toHaveLength(2)
 
-    const opening = await resolveOpeningBalance(ORG_ID, '2026-08-05')
+    // `[]` rather than `entries`: this assertion pins the snapshot +
+    // ajuste_saldo arithmetic exactly, and the local seed org may carry
+    // unrelated realizado rows in the 2026-08-01..2026-08-05 gap that would
+    // make the expected number non-deterministic. The realizado-continuity
+    // behaviour is covered exhaustively in tests/unit/cash-flow/engine.test.ts.
+    const opening = await resolveOpeningBalance(ORG_ID, '2026-08-05', [])
     expect(opening).toEqual({ balance: 10000, asOf: '2026-08-01' })
 
     const days = aggregateByDay(entries, { from: '2026-08-05', to: '2026-08-15' }, opening)

@@ -61,9 +61,15 @@ saldoFinal = saldoInicial + (entradas.realizado + entradas.contratado)
 
 `saldoFinal` de um dia vira `saldoInicial` do dia seguinte. O `saldoInicial`
 do primeiro dia vem de `resolveOpeningBalance` (`lib/cash-flow/engine.ts`):
-o `cash_balance_snapshots` confirmado mais recente antes da data, mais
-qualquer `manual_cash_entries` do tipo `ajuste_saldo` datado estritamente
-entre esse snapshot e a data. Quando não existe nenhum snapshot ainda,
+o `cash_balance_snapshots` confirmado mais recente antes da data (em empate
+de `reference_date`, o de `created_at` mais recente), mais qualquer
+`manual_cash_entries` do tipo `ajuste_saldo` datado estritamente entre esse
+snapshot e a data, mais todo lançamento do bucket `realizado` (AR/AP já
+liquidado e `entrada`/`saida` manual) datado nesse mesmo intervalo — dinheiro
+que de fato se movimentou depois do snapshot e precisa ser carregado adiante.
+Lançamentos `contratado` no intervalo são deliberadamente ignorados: eles não
+são caixa confirmado e misturá-los transformaria o saldo confirmado em
+projeção. Quando não existe nenhum snapshot ainda,
 `resolveOpeningBalance` retorna `null` e todo `saldoInicial`/`saldoFinal` da
 faixa fica `null` — mostrar fluxos sem saldo corrente é aceitável,
 fabricar um saldo inicial não é (Prompt Mestre seção 51).

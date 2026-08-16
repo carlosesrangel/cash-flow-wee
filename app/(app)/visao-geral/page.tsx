@@ -2,7 +2,7 @@ import { getCurrentMember } from '@/lib/auth/session'
 import { canManageCashBalance } from '@/lib/auth/rbac'
 import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
 import { aggregateByDay, getMinimumProjectedBalance } from '@/lib/cash-flow/aggregate'
-import { shiftDateString } from '@/lib/cash-flow/dates'
+import { diffDaysFromToday, shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
@@ -20,14 +20,19 @@ export default async function VisaoGeralPage() {
   const from = shiftDateString(today, -90)
   const to = shiftDateString(today, 90)
 
-  const [entries, opening] = await Promise.all([
-    loadCashFlowEntries(member.orgId),
-    resolveOpeningBalance(member.orgId, from),
-  ])
+  const entries = await loadCashFlowEntries(member.orgId)
+  const opening = await resolveOpeningBalance(member.orgId, from, entries)
   const days = aggregateByDay(entries, { from, to }, opening)
 
-  const todayIndex = days.findIndex((d) => d.date === today)
-  const saldoAtual = todayIndex >= 0 ? days[todayIndex].saldoInicial : null
+  // Independently anchored at "today" (not `from`, which is 90 days in the
+  // past) so a snapshot recorded today is picked up immediately, and built
+  // purely from resolveOpeningBalance's realizado-only accounting — never
+  // the day array's blended saldoInicial, which includes unrealized
+  // (contratado) AR/AP and would misrepresent an unconfirmed projection as
+  // today's actual balance.
+  const currentBalance = await resolveOpeningBalance(member.orgId, shiftDateString(today, 1), entries)
+  const saldoAtual = currentBalance?.balance ?? null
+  const saldoAtualAsOf = currentBalance?.asOf ?? null
 
   const next30 = days.filter((d) => d.date >= today && d.date <= shiftDateString(today, 30))
   const entradas30 = next30.reduce((sum, d) => sum + d.entradas.realizado + d.entradas.contratado, 0)
@@ -44,6 +49,11 @@ export default async function VisaoGeralPage() {
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-neutral-500">Saldo de Caixa Atual</p>
           <p className="text-lg font-semibold">{saldoAtual != null ? formatBRL(saldoAtual) : '—'}</p>
+          {saldoAtualAsOf && saldoAtualAsOf !== today && (
+            <p className="text-xs text-neutral-400">
+              há {diffDaysFromToday(today, saldoAtualAsOf)} dia(s), a partir do saldo confirmado
+            </p>
+          )}
         </div>
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-neutral-500">Entradas próximos 30 dias</p>

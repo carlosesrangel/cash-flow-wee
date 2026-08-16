@@ -3,9 +3,20 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 vi.mock('@/lib/supabase/admin', () => ({ createAdminSupabaseClient: vi.fn() }))
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
+import { loadCashFlowEntries, resolveOpeningBalance, type CashFlowEntry } from '@/lib/cash-flow/engine'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
+
+function makeEntry(overrides: Partial<CashFlowEntry> & { id: string; date: string; amount: number }): CashFlowEntry {
+  return {
+    origin: 'manual',
+    sourceId: overrides.id,
+    direction: 'entrada',
+    bucket: 'realizado',
+    description: null,
+    ...overrides,
+  }
+}
 
 type Row = Record<string, unknown>
 
@@ -180,7 +191,7 @@ describe('resolveOpeningBalance', () => {
 
   it('returns null when there is no snapshot before the given date', async () => {
     mockAdmin({ snapshot: null })
-    expect(await resolveOpeningBalance(ORG_ID, '2026-08-15')).toBeNull()
+    expect(await resolveOpeningBalance(ORG_ID, '2026-08-15', [])).toBeNull()
   })
 
   it('sums bank_balance, cash_on_hand, and liquid_investments from the latest applicable snapshot', async () => {
@@ -194,7 +205,7 @@ describe('resolveOpeningBalance', () => {
       adjustmentRows: [],
     })
 
-    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15')
+    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15', [])
 
     expect(result).toEqual({ balance: 12500, asOf: '2026-08-01' })
   })
@@ -205,8 +216,41 @@ describe('resolveOpeningBalance', () => {
       adjustmentRows: [{ amount: -300 }, { amount: 50 }],
     })
 
-    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15')
+    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15', [])
 
     expect(result).toEqual({ balance: 9750, asOf: '2026-08-01' })
+  })
+
+  it('adds realizado entries dated strictly between the snapshot and the target date', async () => {
+    mockAdmin({
+      snapshot: { reference_date: '2026-08-01', bank_balance: 10000, cash_on_hand: null, liquid_investments: null },
+      adjustmentRows: [],
+    })
+
+    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15', [
+      makeEntry({ id: 'in-gap-entrada', date: '2026-08-05', amount: 700, direction: 'entrada' }),
+      makeEntry({ id: 'in-gap-saida', date: '2026-08-07', amount: 250, direction: 'saida' }),
+      // boundary + outside-the-gap entries must be ignored: the snapshot
+      // already accounts for its own reference_date, and anything from the
+      // target date onward belongs to the displayed window, not the opening.
+      makeEntry({ id: 'on-snapshot-date', date: '2026-08-01', amount: 999, direction: 'entrada' }),
+      makeEntry({ id: 'on-target-date', date: '2026-08-15', amount: 999, direction: 'entrada' }),
+      makeEntry({ id: 'after-target-date', date: '2026-08-20', amount: 999, direction: 'entrada' }),
+    ])
+
+    expect(result).toEqual({ balance: 10450, asOf: '2026-08-01' })
+  })
+
+  it('ignores contratado entries in the gap so an unrealized flow never blends into the confirmed balance', async () => {
+    mockAdmin({
+      snapshot: { reference_date: '2026-08-01', bank_balance: 10000, cash_on_hand: null, liquid_investments: null },
+      adjustmentRows: [],
+    })
+
+    const result = await resolveOpeningBalance(ORG_ID, '2026-08-15', [
+      makeEntry({ id: 'gap-contratado', date: '2026-08-05', amount: 700, direction: 'entrada', bucket: 'contratado' }),
+    ])
+
+    expect(result).toEqual({ balance: 10000, asOf: '2026-08-01' })
   })
 })

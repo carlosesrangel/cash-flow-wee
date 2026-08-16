@@ -20,10 +20,8 @@ export default async function FluxoDeCaixaAnualPage({
   const from = `${year}-01-01`
   const to = `${year}-12-31`
 
-  const [entries, opening] = await Promise.all([
-    loadCashFlowEntries(member.orgId),
-    resolveOpeningBalance(member.orgId, from),
-  ])
+  const entries = await loadCashFlowEntries(member.orgId)
+  const opening = await resolveOpeningBalance(member.orgId, from, entries)
   const days = aggregateByDay(entries, { from, to }, opening)
   const months = aggregateByMonth(days)
 
