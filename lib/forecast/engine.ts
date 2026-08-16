@@ -118,3 +118,132 @@ export async function loadRealizadoByMonth(orgId: string): Promise<MonthlyValue[
 
   return Array.from(totals.values())
 }
+
+export async function createForecastVersion(orgId: string, name: string, actorProfileId: string): Promise<ForecastVersion> {
+  const admin = createAdminSupabaseClient()
+  const versions = await loadAllVersions(orgId)
+  const current = versions[0]
+
+  const { data: version, error: versionError } = await admin
+    .from('forecast_versions')
+    .insert({ org_id: orgId, name, created_by: actorProfileId })
+    .select('id, name, created_at')
+    .single()
+  if (versionError) throw new Error(`Failed to create forecast_versions: ${versionError.message}`)
+
+  if (current) {
+    const entries = await loadVersionEntries(orgId, current.id)
+    if (entries.length > 0) {
+      const { error: copyError } = await admin.from('forecast_entries').insert(
+        entries.map((e) => ({
+          version_id: version.id,
+          ano: e.ano,
+          mes: e.mes,
+          receita: e.value,
+          updated_by: actorProfileId,
+        }))
+      )
+      if (copyError) throw new Error(`Failed to copy forecast_entries: ${copyError.message}`)
+    }
+  }
+
+  return { id: version.id, name: version.name, createdAt: version.created_at }
+}
+
+/**
+ * Upserts a single cell of the planning grid. Throws if `versionId` is not
+ * the org's current (most recently created) version — editing a version
+ * that has been superseded would silently rewrite history instead of
+ * creating a new version, which Prompt Mestre seção 15 explicitly forbids
+ * ("Não sobrescrever previsões antigas").
+ */
+export async function updateForecastEntry(
+  orgId: string,
+  versionId: string,
+  ano: number,
+  mes: number,
+  receita: number,
+  actorProfileId: string
+): Promise<void> {
+  const admin = createAdminSupabaseClient()
+  const versions = await loadAllVersions(orgId)
+  const current = versions[0]
+  if (!current || current.id !== versionId) {
+    throw new Error('Só é possível editar a versão mais recente do forecast')
+  }
+
+  const { error } = await admin
+    .from('forecast_entries')
+    .upsert(
+      { version_id: versionId, ano, mes, receita, updated_by: actorProfileId, updated_at: new Date().toISOString() },
+      { onConflict: 'version_id,ano,mes' }
+    )
+  if (error) throw new Error(`Failed to upsert forecast_entries: ${error.message}`)
+}
+
+export async function createForecastScenario(
+  orgId: string,
+  name: string,
+  actorProfileId: string,
+  duplicateFromScenarioId?: string
+): Promise<ForecastScenario> {
+  const admin = createAdminSupabaseClient()
+
+  let sourceMultipliers: MonthlyValue[] = []
+  if (duplicateFromScenarioId) {
+    const { data: source, error: sourceError } = await admin
+      .from('forecast_scenarios')
+      .select('id')
+      .eq('id', duplicateFromScenarioId)
+      .eq('org_id', orgId)
+      .maybeSingle()
+    if (sourceError) throw new Error(`Failed to load forecast_scenarios: ${sourceError.message}`)
+    if (!source) throw new Error('Cenário de origem não encontrado')
+    sourceMultipliers = await loadMultipliers(admin, duplicateFromScenarioId)
+  }
+
+  const { data: scenario, error: scenarioError } = await admin
+    .from('forecast_scenarios')
+    .insert({ org_id: orgId, name, created_by: actorProfileId })
+    .select('id, name, created_at')
+    .single()
+  if (scenarioError) throw new Error(`Failed to create forecast_scenarios: ${scenarioError.message}`)
+
+  if (sourceMultipliers.length > 0) {
+    const { error: copyError } = await admin.from('forecast_scenario_multipliers').insert(
+      sourceMultipliers.map((m) => ({ scenario_id: scenario.id, ano: m.ano, mes: m.mes, percentual: m.value }))
+    )
+    if (copyError) throw new Error(`Failed to duplicate forecast_scenario_multipliers: ${copyError.message}`)
+  }
+
+  return { id: scenario.id, name: scenario.name, createdAt: scenario.created_at }
+}
+
+/**
+ * Upserts a single scenario/month multiplier, after confirming `scenarioId`
+ * belongs to `orgId` — same tenant-isolation reasoning as
+ * `loadVersionEntries` above.
+ */
+export async function updateScenarioMultiplier(
+  orgId: string,
+  scenarioId: string,
+  ano: number,
+  mes: number,
+  percentual: number
+): Promise<void> {
+  const admin = createAdminSupabaseClient()
+
+  const { data: scenario, error: scenarioError } = await admin
+    .from('forecast_scenarios')
+    .select('id')
+    .eq('id', scenarioId)
+    .eq('org_id', orgId)
+    .maybeSingle()
+  if (scenarioError) throw new Error(`Failed to load forecast_scenarios: ${scenarioError.message}`)
+  if (!scenario) throw new Error('Cenário não encontrado')
+
+  const { error } = await admin
+    .from('forecast_scenario_multipliers')
+    .upsert({ scenario_id: scenarioId, ano, mes, percentual }, { onConflict: 'scenario_id,ano,mes' })
+  if (error) throw new Error(`Failed to upsert forecast_scenario_multipliers: ${error.message}`)
+}
