@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatBRL } from '@/lib/format/currency'
-import { formatDateBR } from '@/lib/format/date'
+import { formatDateOnlyBR } from '@/lib/format/date'
 
 export type MatchStatus =
   | 'reconciliado_automaticamente'
@@ -42,7 +42,7 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
 function candidateLabel(candidateId: string, matchReason: MatchRow['match_reason']): string {
   const detail = matchReason?.candidatos?.find((c) => c.sumupTransactionEventId === candidateId)
   if (!detail) return candidateId.slice(0, 8)
-  return `${formatBRL(detail.valorBrutoSumupEstimado)} · ${formatDateBR(detail.dataVencimentoSumup)}`
+  return `${formatBRL(detail.valorBrutoSumupEstimado)} · ${formatDateOnlyBR(detail.dataVencimentoSumup)}`
 }
 
 const RESOLVED_STATUSES: MatchStatus[] = ['reconciliado_automaticamente', 'reconciliado_manualmente']
@@ -114,7 +114,7 @@ export function ReconciliationTable({ matches, canManage }: { matches: MatchRow[
             return (
               <tr key={match.id} className="border-b last:border-0">
                 <td className="px-3 py-2">{ar?.numero_documento ?? ar?.historico ?? '—'}</td>
-                <td className="px-3 py-2">{ar?.data_vencimento ? formatDateBR(ar.data_vencimento) : '—'}</td>
+                <td className="px-3 py-2">{ar?.data_vencimento ? formatDateOnlyBR(ar.data_vencimento) : '—'}</td>
                 <td className="px-3 py-2">{ar?.valor != null ? formatBRL(ar.valor) : '—'}</td>
                 <td className="px-3 py-2">{STATUS_LABEL[match.status]}</td>
                 {canManage && (
