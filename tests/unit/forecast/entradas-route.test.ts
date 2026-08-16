@@ -31,6 +31,15 @@ function mockAdmin() {
 describe('POST /api/forecast/entradas', () => {
   afterEach(() => vi.restoreAllMocks())
 
+  it('returns 403 when there is no member', async () => {
+    vi.mocked(getCurrentMember).mockResolvedValue(null)
+
+    const { POST } = await import('@/app/api/forecast/entradas/route')
+    const response = await POST(buildRequest(VALID_BODY))
+
+    expect(response.status).toBe(403)
+  })
+
   it('returns 403 when the member lacks canEditForecast', async () => {
     vi.mocked(getCurrentMember).mockResolvedValue({ ...MEMBER, role: 'VIEWER' } as never)
     vi.mocked(canEditForecast).mockReturnValue(false)
@@ -105,6 +114,25 @@ describe('POST /api/forecast/entradas', () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Failed to write audit_logs for forecast_entry_updated:',
       'Database error'
+    )
+  })
+
+  it('sets cenario and comentario to null in audit log when omitted from request', async () => {
+    vi.mocked(getCurrentMember).mockResolvedValue(MEMBER as never)
+    vi.mocked(canEditForecast).mockReturnValue(true)
+    vi.mocked(updateForecastEntry).mockResolvedValue(undefined)
+    const { auditInsert } = mockAdmin()
+
+    const { POST } = await import('@/app/api/forecast/entradas/route')
+    const response = await POST(buildRequest(VALID_BODY))
+    const body = await response.json()
+
+    expect(body).toEqual({ ok: true })
+    expect(auditInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'forecast_entry_updated',
+        after: { receita: 1500, cenario: null, comentario: null },
+      })
     )
   })
 })
