@@ -91,10 +91,30 @@ export default async function VisaoGeralPage() {
         className="sticky top-0 z-50 backdrop-blur-sm"
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Image src="/logo.avif" alt="WEE" width={32} height={32} className="rounded-sm" />
+          <div className="flex items-center gap-4">
+            <div
+              style={{
+                backgroundColor: '#efece3',
+                borderRadius: '4px',
+                padding: '6px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Image
+                src="/logo2.jpg"
+                alt="WEE"
+                width={28}
+                height={28}
+                style={{
+                  objectFit: 'contain',
+                  filter: 'brightness(1.1) contrast(1.2)',
+                }}
+              />
+            </div>
             <div>
-              <div style={{ fontFamily: '"Playfair Display", serif', fontSize: '18px', fontWeight: 300 }}>
+              <div style={{ fontFamily: '"Playfair Display", serif', fontSize: '18px', fontWeight: 400 }}>
                 WEE Cash Flow
               </div>
               <div
