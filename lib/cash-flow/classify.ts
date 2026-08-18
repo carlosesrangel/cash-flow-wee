@@ -1,4 +1,4 @@
-export type CashBucket = 'realizado' | 'contratado'
+export type CashBucket = 'realizado' | 'contratado' | 'projetado'
 
 export type ClassifiedEntry =
   | { included: true; bucket: CashBucket; date: string }
