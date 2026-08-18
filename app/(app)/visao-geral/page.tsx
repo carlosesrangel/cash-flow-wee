@@ -9,46 +9,41 @@ import { formatDateOnlyBR } from '@/lib/format/date'
 import { CashCurveChart } from '@/components/cash-flow/cash-curve-chart'
 import { BalanceForm } from '@/components/cash-flow/balance-form'
 import { ManualEntryForm } from '@/components/cash-flow/manual-entry-form'
+import Image from 'next/image'
 
 function MetricCard({
   label,
   value,
-  variant = 'default',
+  accentColor = '#082d74',
   footnote,
 }: {
   label: string
   value: string
-  variant?: 'default' | 'inflow' | 'outflow' | 'projected'
+  accentColor?: string
   footnote?: string
 }) {
-  const variantStyles = {
-    default: 'border-slate-200 bg-gradient-to-br from-slate-50 to-white',
-    inflow: 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
-    outflow: 'border-rose-200 bg-gradient-to-br from-rose-50 to-white',
-    projected: 'border-blue-200 bg-gradient-to-br from-blue-50 to-white',
-  }
-
-  const valueStyles = {
-    default: 'text-slate-900',
-    inflow: 'text-emerald-700',
-    outflow: 'text-rose-700',
-    projected: 'text-blue-700',
-  }
-
-  const labelStyles = {
-    default: 'text-slate-600',
-    inflow: 'text-emerald-600',
-    outflow: 'text-rose-600',
-    projected: 'text-blue-600',
-  }
-
   return (
     <div
-      className={`group relative rounded-xl border-2 ${variantStyles[variant]} p-5 shadow-sm transition-all duration-200 hover:shadow-lg hover:border-opacity-60 cursor-default`}
+      className="rounded-sm border bg-white p-6 transition-shadow duration-200 hover:shadow-md"
+      style={{ borderColor: '#e3ded0', borderWidth: '1px' }}
     >
-      <p className={`text-sm font-medium ${labelStyles[variant]} mb-3 uppercase tracking-wide`}>{label}</p>
-      <p className={`text-3xl font-bold ${valueStyles[variant]} tabular-nums`}>{value}</p>
-      {footnote && <p className="text-xs text-slate-500 mt-2 leading-relaxed">{footnote}</p>}
+      <p
+        className="text-xs font-medium uppercase tracking-widest mb-4"
+        style={{ color: '#8a8579', fontFamily: '"Space Mono", monospace', letterSpacing: '0.1em' }}
+      >
+        {label}
+      </p>
+      <p
+        className="text-4xl font-light mb-2 tabular-nums"
+        style={{ color: accentColor, fontFamily: '"Playfair Display", serif' }}
+      >
+        {value}
+      </p>
+      {footnote && (
+        <p className="text-xs" style={{ color: '#8a8579', fontFamily: '"Jost", sans-serif' }}>
+          {footnote}
+        </p>
+      )}
     </div>
   )
 }
@@ -85,57 +80,133 @@ export default async function VisaoGeralPage() {
   const minimum = getMinimumProjectedBalance(days.filter((d) => d.date >= today))
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      <div className="space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
+    <div style={{ backgroundColor: '#eae7de' }} className="min-h-screen">
+      {/* Header com Logo */}
+      <div
+        style={{
+          backgroundColor: '#403b38',
+          borderBottom: '1px solid #3a3530',
+          color: '#efece3',
+        }}
+        className="sticky top-0 z-50 backdrop-blur-sm"
+      >
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Image src="/logo.avif" alt="WEE" width={32} height={32} className="rounded-sm" />
+            <div>
+              <div style={{ fontFamily: '"Playfair Display", serif', fontSize: '18px', fontWeight: 300 }}>
+                WEE Cash Flow
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Space Mono", monospace',
+                  fontSize: '10px',
+                  letterSpacing: '0.1em',
+                  color: '#a39d8d',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Visão Geral
+              </div>
+            </div>
+          </div>
+          <div style={{ fontFamily: '"Space Mono", monospace', fontSize: '11px', letterSpacing: '0.08em' }}>
+            {new Date().toLocaleDateString('pt-BR')}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-12 px-6 py-12">
         <div className="max-w-7xl mx-auto">
-          <div className="space-y-2 mb-10">
-            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Visão Geral</h1>
-            <p className="text-lg text-slate-600">Controle completo do seu fluxo de caixa</p>
+          {/* Hero Section */}
+          <div className="mb-16 text-center max-w-2xl mx-auto">
+            <p
+              style={{
+                fontFamily: '"Space Mono", monospace',
+                fontSize: '12px',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                color: '#8a8579',
+                marginBottom: '12px',
+              }}
+            >
+              Controle Financeiro
+            </p>
+            <h1
+              style={{
+                fontFamily: '"Playfair Display", serif',
+                fontSize: '52px',
+                fontWeight: 300,
+                color: '#1c1a17',
+                margin: '0 0 8px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Visão Geral do Caixa
+            </h1>
+            <p style={{ color: '#57534b', fontSize: '15px', lineHeight: 1.6 }}>
+              Acompanhe seu fluxo de caixa em tempo real com projeções precisas
+            </p>
           </div>
 
           {/* KPI Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             <MetricCard
               label="Saldo Atual"
               value={saldoAtual != null ? formatBRL(saldoAtual) : '—'}
-              variant="default"
+              accentColor="#082d74"
               footnote={
                 saldoAtualAsOf && saldoAtualAsOf !== today
                   ? `há ${diffDaysFromToday(today, saldoAtualAsOf)} dia(s)`
-                  : 'Atualizado hoje'
+                  : 'Hoje'
               }
             />
             <MetricCard
               label="Entradas (30 dias)"
               value={formatBRL(entradas30)}
-              variant="inflow"
+              accentColor="#1c6e3c"
               footnote="Próximos 30 dias"
             />
             <MetricCard
               label="Saídas (30 dias)"
               value={formatBRL(saidas30)}
-              variant="outflow"
+              accentColor="#c2341e"
               footnote="Próximos 30 dias"
             />
             <MetricCard
               label="Saldo em 30 dias"
               value={saldoEm30 != null ? formatBRL(saldoEm30) : '—'}
-              variant="projected"
+              accentColor="#846340"
               footnote="Projetado"
             />
           </div>
 
           {/* Alert Section */}
           {minimum && minimum.balance < 0 && (
-            <div className="mt-8 rounded-xl border-2 border-rose-300 bg-gradient-to-r from-rose-50 to-red-50 p-6 backdrop-blur-sm">
-              <div className="flex items-start gap-4">
-                <div className="text-2xl">⚠️</div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-rose-900 mb-1">Alerta: Saldo Negativo Projetado</h3>
-                  <p className="text-rose-800">
-                    O saldo será negativo em <span className="font-bold">{formatDateOnlyBR(minimum.date)}</span> chegando a{' '}
-                    <span className="font-bold">{formatBRL(minimum.balance)}</span>. Considere revisar planejamento de pagamentos.
+            <div
+              className="rounded-sm border p-6 mb-12"
+              style={{
+                backgroundColor: '#fdf5f2',
+                borderColor: '#d9b3a8',
+                borderWidth: '1px',
+              }}
+            >
+              <div className="flex gap-4">
+                <div style={{ fontSize: '20px', flexShrink: 0 }}>⚠️</div>
+                <div>
+                  <h3 style={{ color: '#c2341e', marginBottom: '4px', fontWeight: 600 }}>
+                    Alerta: Saldo Negativo
+                  </h3>
+                  <p
+                    style={{
+                      color: '#6b3d30',
+                      fontSize: '14px',
+                      lineHeight: 1.6,
+                      fontFamily: '"Jost", sans-serif',
+                    }}
+                  >
+                    Seu saldo será negativo em <strong>{formatDateOnlyBR(minimum.date)}</strong> chegando a{' '}
+                    <strong>{formatBRL(minimum.balance)}</strong>
                   </p>
                 </div>
               </div>
@@ -143,35 +214,77 @@ export default async function VisaoGeralPage() {
           )}
 
           {/* Chart Section */}
-          <div className="mt-10 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">Curva de Caixa</h2>
-                <p className="text-slate-600">Projeção de saldo nos próximos 180 dias</p>
-              </div>
-              <div className="h-96 w-full">
-                <CashCurveChart days={days} />
-              </div>
+          <div
+            className="rounded-sm border p-8 mb-12"
+            style={{ backgroundColor: '#faf8f1', borderColor: '#e3ded0', borderWidth: '1px' }}
+          >
+            <h2
+              style={{
+                fontFamily: '"Playfair Display", serif',
+                fontSize: '32px',
+                fontWeight: 300,
+                color: '#1c1a17',
+                marginBottom: '4px',
+              }}
+            >
+              Curva de Caixa
+            </h2>
+            <p style={{ color: '#57534b', marginBottom: '24px', fontSize: '14px' }}>
+              Projeção do saldo nos próximos 180 dias
+            </p>
+            <div className="h-96 w-full">
+              <CashCurveChart days={days} />
             </div>
           </div>
 
           {/* Forms Section */}
           {canManageCashBalance(member.role) && (
-            <div className="mt-10 space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-6">Administração</h2>
-              </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+            <div className="space-y-8">
+              <h2
+                style={{
+                  fontFamily: '"Playfair Display", serif',
+                  fontSize: '32px',
+                  fontWeight: 300,
+                  color: '#1c1a17',
+                  marginBottom: '24px',
+                }}
+              >
+                Administração
+              </h2>
+              <div className="grid gap-8 lg:grid-cols-2">
+                <div className="rounded-sm border p-8" style={{ backgroundColor: '#faf8f1', borderColor: '#e3ded0' }}>
                   <BalanceForm />
                 </div>
-                <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+                <div className="rounded-sm border p-8" style={{ backgroundColor: '#faf8f1', borderColor: '#e3ded0' }}>
                   <ManualEntryForm />
                 </div>
               </div>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="border-t py-8 mt-16"
+        style={{
+          backgroundColor: '#403b38',
+          borderTopColor: '#3a3530',
+          color: '#efece3',
+          textAlign: 'center',
+        }}
+      >
+        <p
+          style={{
+            fontFamily: '"Space Mono", monospace',
+            fontSize: '10px',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: '#a39d8d',
+          }}
+        >
+          WEE Cash Flow & Business Intelligence Platform
+        </p>
       </div>
     </div>
   )

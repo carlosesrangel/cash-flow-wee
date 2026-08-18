@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Brandology — Referência de Identidade Visual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,300;0,400;0,600;1,400&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --frame:#403b38;
+    --cream:#f8f7f1;
+    --card:#faf8f1;
+    --yellow:#fef1ca;
+    --ink:#1c1a17;
+    --accent-blue:#082d74;
+    --accent-brown:#846340;
+    --line:#000000;
+    --muted:#8a8579;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:#eae7de;
+    color:var(--ink);
+    font-family:'Jost',sans-serif;
+    line-height:1.5;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:64px 32px 120px;}
+  header.hero{
+    text-align:center;
+    margin-bottom:80px;
+  }
+  header.hero .kicker{
+    font-family:'Space Mono',monospace;
+    letter-spacing:.15em;
+    font-size:12px;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:18px;
+  }
+  header.hero h1{
+    font-family:'Playfair Display',serif;
+    font-weight:300;
+    font-size:72px;
+    margin:0 0 14px;
+    color:var(--frame);
+    letter-spacing:.01em;
+  }
+  header.hero p{
+    max-width:560px;
+    margin:0 auto;
+    color:#57534b;
+    font-size:15px;
+  }
+  section{margin-bottom:96px;}
+  h2.section-title{
+    font-family:'Space Mono',monospace;
+    text-transform:uppercase;
+    font-size:13px;
+    letter-spacing:.14em;
+    color:var(--frame);
+    border-bottom:1px solid #c9c4b6;
+    padding-bottom:14px;
+    margin-bottom:32px;
+    display:flex;
+    justify-content:space-between;
+  }
+  h2.section-title span.n{color:var(--muted);}
+  p.lead{max-width:640px;color:#4a463f;font-size:15px;margin-bottom:32px;}
+
+  /* palette */
+  .palette-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;}
+  .swatch{border-radius:4px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12);background:#fff;}
+  .swatch .chip{height:100px;}
+  .swatch .info{padding:12px 14px;background:#fff;}
+  .swatch .name{font-size:13px;font-weight:600;margin-bottom:2px;}
+  .swatch .hex{font-family:'Space Mono',monospace;font-size:12px;color:#726d61;}
+  .swatch .use{font-size:11.5px;color:#8a8579;margin-top:6px;}
+
+  /* typography */
+  .type-row{display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:baseline;padding:26px 0;border-bottom:1px dashed #cfcabc;}
+  .type-row:last-child{border-bottom:none;}
+  .type-meta{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .type-meta .sub{display:block;margin-top:6px;color:#a39d8d;font-size:10.5px;text-transform:none;letter-spacing:0;}
+  .specimen-serif{font-family:'Playfair Display',serif;font-size:38px;line-height:1.2;color:var(--ink);}
+  .specimen-serif.light{font-weight:300;}
+  .specimen-mono{font-family:'Space Mono',monospace;font-size:15px;letter-spacing:.02em;}
+  .specimen-mono.upper{text-transform:uppercase;letter-spacing:.12em;font-size:13px;}
+
+  /* mockups */
+  .mockup-row{display:grid;grid-template-columns:1fr 1fr;gap:36px;}
+  .cover-mock{
+    background:var(--frame);
+    padding:14px;
+    border-radius:2px;
+    aspect-ratio:4/5;
+    display:flex;
+    flex-direction:column;
+  }
+  .cover-mock .topbar{
+    display:flex;justify-content:space-between;color:#efece3;
+    font-family:'Space Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding-bottom:10px;
+  }
+  .cover-mock .art{
+    flex:1;
+    background:linear-gradient(160deg,var(--accent-blue),#0a3a91 60%, #123a86);
+    position:relative;
+    display:flex;align-items:flex-start;justify-content:center;
+    overflow:hidden;
+  }
+  .cover-mock .art h3{
+    font-family:'Playfair Display',serif;
+    font-weight:300;
+    font-size:56px;
+    color:var(--yellow);
+    margin:18px 0 0;
+    text-align:center;
+  }
+  .cover-mock .card{
+    position:absolute;bottom:14px;right:14px;left:14px;
+    background:var(--card);
+    padding:10px 12px;
+    font-size:9.5px;
+  }
+  .cover-mock .card b{
+    font-family:'Space Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:3px;
+  }
+  .cover-mock .botbar{
+    color:#efece3;text-align:right;
+    font-family:'Space Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding-top:10px;
+  }
+
+  .page-mock{
+    background:var(--cream);
+    aspect-ratio:4/5;
+    position:relative;
+    padding:26px 20px 26px 56px;
+    border:1px solid #e3ded0;
+  }
+  .page-mock .binder{
+    position:absolute;left:22px;top:0;bottom:0;width:1px;background:#111;
+  }
+  .page-mock .dot{
+    position:absolute;left:16px;width:9px;height:9px;border-radius:50%;background:#111;
+  }
+  .page-mock .toprow{
+    display:flex;justify-content:space-between;
+    font-family:'Space Mono',monospace;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:#1c1a17;
+    margin-bottom:24px;
+  }
+  .page-mock .quote{
+    font-family:'Playfair Display',serif;font-size:21px;line-height:1.28;color:#141210;margin-bottom:16px;
+  }
+  .page-mock .quote b{font-weight:600;}
+  .page-mock .arrow{
+    font-family:'Space Mono',monospace;font-size:10.5px;color:#141210;line-height:1.5;
+  }
+
+  figcaption{
+    font-family:'Space Mono',monospace;font-size:10.5px;color:var(--muted);text-align:center;margin-top:12px;letter-spacing:.04em;
+  }
+
+  /* components gallery */
+  .comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  .comp-card{background:#fff;border:1px solid #e3ded0;border-radius:4px;padding:20px;}
+  .comp-card .label{font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:14px;}
+  .kicker-demo{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #e3ded0;padding-bottom:10px;}
+  .note-card-demo{background:var(--card);border:1px solid #e9e5d8;padding:14px 16px;font-size:13px;}
+  .note-card-demo b{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:6px;}
+  .arrow-demo{font-family:'Space Mono',monospace;font-size:13px;background:#fff;}
+  .footer-demo{background:var(--frame);color:#efece3;text-align:right;padding:10px 16px;font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;}
+
+  /* photography */
+  .photo-notes{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  .photo-card{background:#fff;border:1px solid #e3ded0;border-radius:4px;overflow:hidden;}
+  .photo-card .bar{height:90px;}
+  .photo-card .txt{padding:14px 16px;font-size:12.5px;color:#4a463f;}
+  .photo-card .txt b{display:block;font-size:13px;margin-bottom:4px;color:var(--ink);}
+
+  table.sources{width:100%;border-collapse:collapse;font-size:13px;}
+  table.sources th{
+    font-family:'Space Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    text-align:left;padding:8px 10px;border-bottom:1px solid #c9c4b6;
+  }
+  table.sources td{padding:9px 10px;border-bottom:1px solid #e6e2d4;color:#3a362f;}
+  table.sources tr:last-child td{border-bottom:none;}
+
+  footer.page-footer{
+    text-align:center;font-family:'Space Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:.06em;
+    margin-top:40px;
+  }
+
+  @media(max-width:720px){
+    .palette-grid{grid-template-columns:repeat(2,1fr);}
+    .mockup-row,.comp-grid,.photo-notes{grid-template-columns:1fr;}
+    header.hero h1{font-size:46px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Facettes &amp; Florian Deveaux</div>
+    <h1>Brandology</h1>
+    <p>Referência de identidade visual extraída da série de carrosséis "Brandology" (edições N°2, N°5, N°6 e N°26, em PDF/francês). Paleta, tipografia, grid e componentes recorrentes documentados a partir do material original.</p>
+  </header>
+
+  <section>
+    <h2 class="section-title">01 — Paleta de cores <span class="n">core</span></h2>
+    <p class="lead">A base é neutra e editorial — moldura escura, papel creme e um amarelo-manteiga reservado ao logotype. A cor "de impacto" muda a cada edição através da fotografia (azul, terracota, dourado), não da paleta fixa.</p>
+    <div class="palette-grid">
+      <div class="swatch">
+        <div class="chip" style="background:#403b38;"></div>
+        <div class="info">
+          <div class="name">Moldura / Charcoal</div>
+          <div class="hex">#403B38</div>
+          <div class="use">Borda externa, header e footer da capa</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#f8f7f1;"></div>
+        <div class="info">
+          <div class="name">Papel / Cream</div>
+          <div class="hex">#F8F7F1</div>
+          <div class="use">Fundo de todas as páginas de conteúdo</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#fef1ca;"></div>
+        <div class="info">
+          <div class="name">Butter Yellow</div>
+          <div class="hex">#FEF1CA</div>
+          <div class="use">Logotype "Brandology" na capa</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#faf8f1;border:1px solid #eee;"></div>
+        <div class="info">
+          <div class="name">Note Card</div>
+          <div class="hex">#FAF8F1</div>
+          <div class="use">Cartão "DOSSIER / HORS-SÉRIE"</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#1c1a17;"></div>
+        <div class="info">
+          <div class="name">Ink</div>
+          <div class="hex">#1C1A17</div>
+          <div class="use">Tipografia de corpo e headline</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#000;"></div>
+        <div class="info">
+          <div class="name">Line &amp; Dots</div>
+          <div class="hex">#000000</div>
+          <div class="use">Linha de fichário + furos, à esquerda</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#082d74;"></div>
+        <div class="info">
+          <div class="name">Accent (ed. 2)</div>
+          <div class="hex">#082D74</div>
+          <div class="use">Cor "de impacto" via still-life fotográfico</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background:#846340;"></div>
+        <div class="info">
+          <div class="name">Accent (ed. 5)</div>
+          <div class="hex">#846340</div>
+          <div class="use">Cor "de impacto" via still-life fotográfico</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">02 — Tipografia <span class="n">specimen</span></h2>
+    <p class="lead">Dois papéis bem definidos: uma serifada editorial de alto contraste para títulos e citações, e uma monoespaçada para tudo que é "meta" — labels, legendas, anotações e números. (Fontes de substituição usadas nesta página: Playfair Display no lugar de PP Editorial New, Space Mono é a fonte real usada no material.)</p>
+
+    <div class="type-row">
+      <div class="type-meta">Display Serif
+        <span class="sub">PP Editorial New — Ultralight/Regular</span>
+      </div>
+      <div class="specimen-serif light">Brandology</div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-meta">Headline / Quote
+        <span class="sub">PP Editorial New — Regular</span>
+      </div>
+      <div class="specimen-serif">Une marque ne vend pas un produit.<br>Elle vend une <b>confiance</b>.</div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-meta">Kicker / Label
+        <span class="sub">Space Mono — Regular, uppercase, tracking largo</span>
+      </div>
+      <div class="specimen-mono upper">Florian Deveaux · Le Réflexe Classique</div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-meta">Anotação / Nota
+        <span class="sub">Space Mono — Regular</span>
+      </div>
+      <div class="specimen-mono">→ La marque, c'est ce qui transforme le désir en business <b>€€€€</b></div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-meta">Sans (variante)
+        <span class="sub">PP Neue Montreal / Helvetica World — usada em PDFs "lead magnet"</span>
+      </div>
+      <div style="font-family:'Jost',sans-serif;font-size:26px;font-weight:400;">Comment exploiter le plein potentiel de votre marque ?</div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">03 — Templates de página <span class="n">grid</span></h2>
+    <p class="lead">Formato vertical (próximo de 4:5). Duas peças fixas se repetem em toda a série: a capa-editorial e a página de "caderno" para o conteúdo.</p>
+    <div class="mockup-row">
+      <figure>
+        <div class="cover-mock">
+          <div class="topbar"><span>Facettes &amp; Florian Deveaux</span><span>Vous présentent</span><span>Le jeudi 00 mois 2026</span></div>
+          <div class="art">
+            <h3>Brandology</h3>
+            <div class="card"><b>Dossier</b>Título do dossiê da edição, em duas ou três linhas.</div>
+          </div>
+          <div class="botbar">Edition N°00</div>
+        </div>
+        <figcaption>Capa — foto still-life + logotype serifado</figcaption>
+      </figure>
+      <figure>
+        <div class="page-mock">
+          <div class="binder"></div>
+          <div class="dot" style="top:18%;"></div>
+          <div class="dot" style="top:48%;"></div>
+          <div class="dot" style="top:80%;"></div>
+          <div class="toprow"><span>Florian Deveaux</span><span>1. Le Réflexe Classique</span></div>
+          <div class="quote">Le trafic ne manque pas.<br>Ce qui manque, c'est la conversion.</div>
+          <div class="arrow">→ La marque, c'est ce qui transforme le désir en business €€€€</div>
+        </div>
+        <figcaption>Página interna — "folha de caderno", linha de fichário + furos</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">04 — Componentes recorrentes <span class="n">ui kit</span></h2>
+    <div class="comp-grid">
+      <div class="comp-card">
+        <div class="label">Kicker row (topo de página)</div>
+        <div class="kicker-demo"><span>Florian Deveaux</span><span>Le Problème</span></div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Note card (Dossier / Hors-Série)</div>
+        <div class="note-card-demo"><b>Dossier</b>Le CRO des marques premium : quand la marque devient le levier le plus rentable</div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Anotação com seta</div>
+        <div class="arrow-demo">→ Résultat : promos, dépendance au paid, élasticité-prix défavorable.</div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Rodapé de edição</div>
+        <div class="footer-demo">Edition N°26</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">05 — Direção de fotografia <span class="n">art direction</span></h2>
+    <p class="lead">A imagem de capa é sempre um still-life ou uma cena estilizada — nunca um gráfico ou ícone — criando contraste com o texto editorial das páginas internas.</p>
+    <div class="photo-notes">
+      <div class="photo-card">
+        <div class="bar" style="background:linear-gradient(160deg,#0b3380,#173e86);"></div>
+        <div class="txt"><b>Still-life conceitual</b>Objeto do cotidiano reinterpretado como metáfora da marca (ex.: bolsa de soro com "émotions").</div>
+      </div>
+      <div class="photo-card">
+        <div class="bar" style="background:linear-gradient(160deg,#8a6b45,#6e5334);"></div>
+        <div class="txt"><b>Mesa posta / still-life clássico</b>Prato, talher ou objeto de luxo com um cartão de texto sobreposto ("Your brand is ready for...").</div>
+      </div>
+      <div class="photo-card">
+        <div class="bar" style="background:linear-gradient(160deg,#c9c2b0,#a49a82);"></div>
+        <div class="txt"><b>Bastidor / studio</b>Cena de making-of fotográfico (softbox, cadeira, luz), remetendo à produção de conteúdo.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">06 — Fontes consultadas <span class="n">arquivos</span></h2>
+    <table class="sources">
+      <thead><tr><th>Arquivo</th><th>Edição</th><th>Tema do dossiê</th></tr></thead>
+      <tbody>
+        <tr><td>1760353725970.pdf</td><td>N°2</td><td>Le CRO des marques premium</td></tr>
+        <tr><td>1762416663966.pdf</td><td>N°5</td><td>Le funnel émotionnel qui rapporte (partie 1)</td></tr>
+        <tr><td>1762771877826.pdf</td><td>N°6</td><td>Le funnel émotionnel qui rapporte (partie 2)</td></tr>
+        <tr><td>Parte 1.pdf</td><td>N°26 (Hors-Série)</td><td>La Content Factory</td></tr>
+        <tr><td>1761116989926.pdf</td><td>—</td><td>Lead magnet: pirâmide do branding / identidade visual como camada 06</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="page-footer">Documento de referência gerado a partir dos PDFs da pasta Brandology — não substitui os arquivos originais em francês.</footer>
+
+</div>
+</body>
+</html>
