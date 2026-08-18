@@ -2,7 +2,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { loadCashFlowEntries, resolveOpeningBalance, type CashFlowEntry } from '@/lib/cash-flow/engine'
 import { loadPlannedPayments, loadPaymentScenarios } from '@/lib/payments/engine'
 import { mergePlannedPaymentsIntoFlow } from '@/lib/payments/scenarios'
-import type { PlannedPaymentValue } from '@/lib/payments/scenarios'
+import type { PlannedPaymentValue, PaymentAdjustment } from '@/lib/payments/scenarios'
 
 /**
  * Load actual cash flow entries merged with planned payments.
@@ -45,7 +45,7 @@ export async function loadCashFlowWithPlannedPayments(
   })
 
   // Load scenario adjustments if specified
-  let adjustments = []
+  let adjustments: PaymentAdjustment[] = []
   if (scenarioId) {
     const scenarios = await loadPaymentScenarios(orgId)
     const scenario = scenarios.find((s) => s.scenario.id === scenarioId)

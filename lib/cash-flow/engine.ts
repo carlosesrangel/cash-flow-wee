@@ -6,7 +6,7 @@ type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
 export type CashFlowEntry = {
   id: string
-  origin: 'ar' | 'ap' | 'manual' | 'forecast'
+  origin: 'ar' | 'ap' | 'manual' | 'forecast' | 'payment_plan'
   sourceId: string
   date: string
   amount: number

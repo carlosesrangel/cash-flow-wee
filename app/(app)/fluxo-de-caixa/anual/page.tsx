@@ -1,23 +1,26 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
 import { loadForecastedCashFlowEntries, mergeCashFlowWithForecast } from '@/lib/forecast/projection'
+import { loadCashFlowWithPlannedPayments } from '@/lib/cash-flow/with-payments'
 import { aggregateByDay, aggregateByMonth } from '@/lib/cash-flow/aggregate'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { AnnualTable } from '@/components/cash-flow/annual-table'
 import { ForecastToggle } from '@/components/cash-flow/forecast-toggle'
+import { PaymentsToggle } from '@/components/cash-flow/payments-toggle'
 
 export default async function FluxoDeCaixaAnualPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ano?: string; forecast?: string }>
+  searchParams: Promise<{ ano?: string; forecast?: string; payments?: string }>
 }) {
   const member = await getCurrentMember()
   if (!member) {
     return <p className="text-sm text-neutral-500">Faça login para ver o fluxo de caixa.</p>
   }
 
-  const { ano, forecast } = await searchParams
+  const { ano, forecast, payments } = await searchParams
   const showForecast = forecast !== 'false'
+  const showPayments = payments !== 'false'
   const currentYear = Number(toLocalDateParam(new Date()).slice(0, 4))
   const year = ano && /^\d{4}$/.test(ano) ? Number(ano) : currentYear
   const from = `${year}-01-01`
@@ -32,6 +35,18 @@ export default async function FluxoDeCaixaAnualPage({
     const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
     const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
     entries = mergeCashFlowWithForecast(actualEntries, forecastEntries, today)
+  }
+
+  if (showPayments) {
+    entries = await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
+    // Merge with forecast if both enabled
+    if (showForecast) {
+      const forecastEntries = await loadForecastedCashFlowEntries(member.orgId)
+      const now = new Date()
+      const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+      const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
+      entries = mergeCashFlowWithForecast(entries, forecastEntries, today)
+    }
   }
 
   const opening = await resolveOpeningBalance(member.orgId, from, entries)
@@ -52,6 +67,7 @@ export default async function FluxoDeCaixaAnualPage({
           </button>
         </form>
         <ForecastToggle />
+        <PaymentsToggle />
       </div>
       <AnnualTable months={months} />
     </div>

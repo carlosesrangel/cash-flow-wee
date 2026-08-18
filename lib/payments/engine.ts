@@ -106,7 +106,7 @@ async function loadAdjustmentsForScenario(admin: AdminClient, scenarioId: string
     (from, to) =>
       admin
         .from('scenario_adjustments')
-        .select('ap_id, days_delta, percentage')
+        .select('scenario_id, ap_id, days_delta, percentage')
         .eq('scenario_id', scenarioId)
         .range(from, to),
     'Failed to load scenario_adjustments'
