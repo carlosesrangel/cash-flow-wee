@@ -99,8 +99,9 @@ describe('mergeCashFlowWithForecast', () => {
     const result = mergeCashFlowWithForecast(MOCK_ACTUAL_ENTRIES, forecastEntries, today)
 
     // Should include actual + future forecast (Sep and later)
-    expect(result.filter((e) => e.origin === 'forecast')).toHaveLength(1)
-    expect(result.filter((e) => e.origin === 'forecast')[0].date).toBe('2026-09-01')
+    const forecasts = result.filter((e) => e.origin === ('forecast' as any))
+    expect(forecasts).toHaveLength(1)
+    expect(forecasts[0].date).toBe('2026-09-01')
   })
 
   it('returns only actual entries when no forecast', () => {

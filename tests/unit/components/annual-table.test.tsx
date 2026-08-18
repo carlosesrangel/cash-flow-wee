@@ -6,8 +6,8 @@ import type { CashFlowMonth } from '@/lib/cash-flow/aggregate'
 const MONTHS: CashFlowMonth[] = [
   {
     month: '2026-08',
-    entradas: { realizado: 1000, contratado: 500 },
-    saidas: { realizado: 300, contratado: 200 },
+    entradas: { realizado: 1000, contratado: 500, projetado: 0 },
+    saidas: { realizado: 300, contratado: 200, projetado: 0 },
     saldoFinal: 5000,
   },
 ]

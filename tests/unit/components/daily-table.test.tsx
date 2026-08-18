@@ -8,8 +8,8 @@ const DAYS: CashFlowDay[] = [
   {
     date: '2026-08-15',
     saldoInicial: 1000,
-    entradas: { realizado: 100, contratado: 0 },
-    saidas: { realizado: 0, contratado: 0 },
+    entradas: { realizado: 100, contratado: 0, projetado: 0 },
+    saidas: { realizado: 0, contratado: 0, projetado: 0 },
     saldoFinal: 1100,
   },
 ]
