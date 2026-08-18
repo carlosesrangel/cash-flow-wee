@@ -4,8 +4,8 @@ import { shiftDateString } from '@/lib/cash-flow/dates'
 export type CashFlowDay = {
   date: string
   saldoInicial: number | null
-  entradas: { realizado: number; contratado: number }
-  saidas: { realizado: number; contratado: number }
+  entradas: { realizado: number; contratado: number; projetado: number }
+  saidas: { realizado: number; contratado: number; projetado: number }
   saldoFinal: number | null
 }
 
@@ -35,8 +35,8 @@ export function aggregateByDay(
 
   for (let date = range.from; date <= range.to; date = shiftDateString(date, 1)) {
     const dayEntries = byDate.get(date) ?? []
-    const entradas = { realizado: 0, contratado: 0 }
-    const saidas = { realizado: 0, contratado: 0 }
+    const entradas = { realizado: 0, contratado: 0, projetado: 0 }
+    const saidas = { realizado: 0, contratado: 0, projetado: 0 }
     for (const entry of dayEntries) {
       const target = entry.direction === 'entrada' ? entradas : saidas
       target[entry.bucket] += entry.amount
@@ -56,8 +56,8 @@ export function aggregateByDay(
 
 export type CashFlowMonth = {
   month: string
-  entradas: { realizado: number; contratado: number }
-  saidas: { realizado: number; contratado: number }
+  entradas: { realizado: number; contratado: number; projetado: number }
+  saidas: { realizado: number; contratado: number; projetado: number }
   saldoFinal: number | null
 }
 
@@ -69,14 +69,16 @@ export function aggregateByMonth(days: CashFlowDay[]): CashFlowMonth[] {
     const month = day.date.slice(0, 7)
     const existing = byMonth.get(month) ?? {
       month,
-      entradas: { realizado: 0, contratado: 0 },
-      saidas: { realizado: 0, contratado: 0 },
+      entradas: { realizado: 0, contratado: 0, projetado: 0 },
+      saidas: { realizado: 0, contratado: 0, projetado: 0 },
       saldoFinal: null,
     }
     existing.entradas.realizado += day.entradas.realizado
     existing.entradas.contratado += day.entradas.contratado
+    existing.entradas.projetado += day.entradas.projetado
     existing.saidas.realizado += day.saidas.realizado
     existing.saidas.contratado += day.saidas.contratado
+    existing.saidas.projetado += day.saidas.projetado
     existing.saldoFinal = day.saldoFinal
     byMonth.set(month, existing)
   }

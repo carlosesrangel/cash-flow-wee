@@ -44,8 +44,22 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                     </button>
                   </td>
                   <td className="px-3 py-2">{day.saldoInicial != null ? formatBRL(day.saldoInicial) : '—'}</td>
-                  <td className="px-3 py-2 text-emerald-700">{formatBRL(totalEntradas)}</td>
-                  <td className="px-3 py-2 text-red-700">{formatBRL(totalSaidas)}</td>
+                  <td className="px-3 py-2">
+                    <div className="space-y-0.5 text-emerald-700">
+                      <div>{formatBRL(totalEntradas)}</div>
+                      {day.entradas.projetado > 0 && (
+                        <div className="text-xs text-emerald-600">+ {formatBRL(day.entradas.projetado)} (proj.)</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="space-y-0.5 text-red-700">
+                      <div>{formatBRL(totalSaidas)}</div>
+                      {day.saidas.projetado > 0 && (
+                        <div className="text-xs text-red-600">+ {formatBRL(day.saidas.projetado)} (proj.)</div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 font-medium">{day.saldoFinal != null ? formatBRL(day.saldoFinal) : '—'}</td>
                 </tr>
                 {isExpanded && (

@@ -37,10 +37,10 @@ describe('aggregateByDay', () => {
       { from: '2026-08-15', to: '2026-08-16' },
       null
     )
-    expect(days[0].entradas).toEqual({ realizado: 50, contratado: 30 })
-    expect(days[0].saidas).toEqual({ realizado: 20, contratado: 0 })
-    expect(days[1].entradas).toEqual({ realizado: 0, contratado: 0 })
-    expect(days[1].saidas).toEqual({ realizado: 0, contratado: 10 })
+    expect(days[0].entradas).toEqual({ realizado: 50, contratado: 30, projetado: 0 })
+    expect(days[0].saidas).toEqual({ realizado: 20, contratado: 0, projetado: 0 })
+    expect(days[1].entradas).toEqual({ realizado: 0, contratado: 0, projetado: 0 })
+    expect(days[1].saidas).toEqual({ realizado: 0, contratado: 10, projetado: 0 })
   })
 
   it('ignores entries outside the requested range', () => {
@@ -66,7 +66,7 @@ describe('aggregateByDay', () => {
     expect(days[2]).toMatchObject({ saldoInicial: 1060, saldoFinal: 1060 })
     for (const day of days) {
       expect(day.saldoFinal).toBe(
-        (day.saldoInicial as number) + day.entradas.realizado + day.entradas.contratado - day.saidas.realizado - day.saidas.contratado
+        (day.saldoInicial as number) + day.entradas.realizado + day.entradas.contratado + day.entradas.projetado - day.saidas.realizado - day.saidas.contratado - day.saidas.projetado
       )
     }
   })
@@ -84,8 +84,8 @@ describe('aggregateByMonth', () => {
     )
     const months = aggregateByMonth(days)
     expect(months).toEqual([
-      { month: '2026-08', entradas: { realizado: 100, contratado: 0 }, saidas: { realizado: 0, contratado: 0 }, saldoFinal: 100 },
-      { month: '2026-09', entradas: { realizado: 0, contratado: 0 }, saidas: { realizado: 40, contratado: 0 }, saldoFinal: 60 },
+      { month: '2026-08', entradas: { realizado: 100, contratado: 0, projetado: 0 }, saidas: { realizado: 0, contratado: 0, projetado: 0 }, saldoFinal: 100 },
+      { month: '2026-09', entradas: { realizado: 0, contratado: 0, projetado: 0 }, saidas: { realizado: 40, contratado: 0, projetado: 0 }, saldoFinal: 60 },
     ])
   })
 })
