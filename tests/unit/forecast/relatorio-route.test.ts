@@ -32,17 +32,6 @@ const MOCK_REPORT = [
   { ano: 2026, mes: 9, planejado: 12000, realizado: null, diferencaAbsoluta: null, diferencaPercentual: null },
 ]
 
-function buildRequest(query?: Record<string, string>) {
-  const url = new URL('http://localhost/api/forecast/relatorio')
-  if (query) {
-    Object.entries(query).forEach(([key, value]) => {
-      url.searchParams.append(key, value)
-    })
-  }
-  return new NextRequest(url)
-}
-
-// Mock NextRequest since vitest doesn't have it
 function createMockRequest(url: URL) {
   return {
     nextUrl: url,
