@@ -5,33 +5,26 @@ interface Props {
   summary: SalesSummary
 }
 
+function KPITile({ label, value, emoji }: { label: string; value: string | number; emoji: string }) {
+  return (
+    <div className="group rounded-xl border-2 border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm transition-all duration-200 hover:shadow-lg hover:border-slate-300 cursor-default">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-sm font-medium text-slate-600 uppercase tracking-wide">{label}</p>
+        <span className="text-2xl">{emoji}</span>
+      </div>
+      <p className="text-3xl font-bold text-slate-900 tabular-nums">{value}</p>
+    </div>
+  )
+}
+
 export function SalesSummaryCard({ summary }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-xs text-neutral-500">Receita Anual</div>
-        <div className="mt-2 text-2xl font-bold">{formatBRL(summary.totalRevenue)}</div>
-      </div>
-
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-xs text-neutral-500">Receita (Mês)</div>
-        <div className="mt-2 text-2xl font-bold">{formatBRL(summary.monthlyRevenue)}</div>
-      </div>
-
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-xs text-neutral-500">Nota Média</div>
-        <div className="mt-2 text-2xl font-bold">{formatBRL(summary.averageOrderValue)}</div>
-      </div>
-
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-xs text-neutral-500">Faturas (Mês)</div>
-        <div className="mt-2 text-2xl font-bold">{summary.invoicesThisMonth}</div>
-      </div>
-
-      <div className="rounded-lg border bg-white p-4">
-        <div className="text-xs text-neutral-500">Clientes Top</div>
-        <div className="mt-2 text-2xl font-bold">{summary.topCustomersCount}</div>
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      <KPITile label="Receita Anual" value={formatBRL(summary.totalRevenue)} emoji="📊" />
+      <KPITile label="Receita (Mês)" value={formatBRL(summary.monthlyRevenue)} emoji="📈" />
+      <KPITile label="Ticket Médio" value={formatBRL(summary.averageOrderValue)} emoji="💰" />
+      <KPITile label="Faturas (Mês)" value={summary.invoicesThisMonth} emoji="📄" />
+      <KPITile label="Clientes Top" value={summary.topCustomersCount} emoji="👥" />
     </div>
   )
 }

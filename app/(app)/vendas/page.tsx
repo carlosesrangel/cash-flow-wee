@@ -57,37 +57,62 @@ export default function VendasPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-neutral-500">Carregando analytics...</p>
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center">
+        <p className="text-lg text-slate-600">Carregando analytics...</p>
+      </div>
+    )
   }
 
   if (!data) {
-    return <p className="text-sm text-neutral-500">Erro ao carregar dados.</p>
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center">
+        <p className="text-lg text-slate-600">Erro ao carregar dados.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Análise de Vendas</h1>
-        <p className="text-sm text-neutral-500">Últimos 90 dias de receita, clientes e produtos</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+      <div className="space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="space-y-2 mb-10">
+            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Análise de Vendas</h1>
+            <p className="text-lg text-slate-600">Últimos 90 dias: receita, clientes e produtos</p>
+          </div>
 
-      <SalesSummaryCard summary={data.summary} />
+          {/* KPI Summary */}
+          <div className="mb-10">
+            <SalesSummaryCard summary={data.summary} />
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <RevenueTrendList data={data.timeSeries} />
+          {/* Revenue Trend & Monthly */}
+          <div className="grid gap-6 lg:grid-cols-2 mb-8">
+            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+              <RevenueTrendList data={data.timeSeries} />
+            </div>
+            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+              <MonthlyRevenueCard data={data.monthly} />
+            </div>
+          </div>
+
+          {/* Customers & Products */}
+          <div className="grid gap-6 lg:grid-cols-2 mb-8">
+            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+              <TopCustomersCard customers={data.topCustomers} />
+            </div>
+            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+              <ProductsRevenueCard products={data.products} />
+            </div>
+          </div>
+
+          {/* Variance */}
+          <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+            <VarianceCard data={data.variance} />
+          </div>
         </div>
-        <div>
-          <MonthlyRevenueCard data={data.monthly} />
-        </div>
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <TopCustomersCard customers={data.topCustomers} />
-        <ProductsRevenueCard products={data.products} />
-      </div>
-
-      <VarianceCard data={data.variance} />
     </div>
   )
 }
