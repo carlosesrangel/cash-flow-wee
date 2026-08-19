@@ -83,7 +83,6 @@ export default function PlanejarpagamentosPage() {
     )
   }
 
-  const totalPayments = payments.reduce((sum, p) => sum + p.valor, 0)
 
   return (
     <div className="space-y-6">
@@ -94,21 +93,16 @@ export default function PlanejarpagamentosPage() {
 
       {/* Summary Cards */}
       {payments.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <MetricCard
             label="Pagamentos Pendentes"
             value={payments.length.toString()}
-            accentColor="#082d74"
-          />
-          <MetricCard
-            label="Valor Total"
-            value={formatBRL(totalPayments)}
-            accentColor="#082d74"
+            accentColor="navy"
           />
           <MetricCard
             label="Cenários Disponíveis"
             value={scenarios.length.toString()}
-            accentColor="#082d74"
+            accentColor="navy"
           />
         </div>
       )}
@@ -129,22 +123,15 @@ export default function PlanejarpagamentosPage() {
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {payments.map((p) => (
                   <div key={p.apId} className="rounded-lg border border-border bg-muted/30 p-4 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {p.fornecedor || p.numeroDocumento || 'Sem dados'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {p.descricao || p.historico || p.apId.slice(0, 8)}
-                        </p>
+                        <p className="font-medium text-foreground truncate">{p.apId.slice(0, 8)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">ID da conta a pagar</p>
                       </div>
-                      <p className="font-mono font-semibold text-foreground whitespace-nowrap">
-                        {formatBRL(p.valor)}
-                      </p>
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        {formatDateOnlyBR(p.plannedDate)}
+                      </Badge>
                     </div>
-                    <Badge variant="secondary" className="text-xs">
-                      Vencimento: {formatDateOnlyBR(p.plannedDate)}
-                    </Badge>
                   </div>
                 ))}
               </div>

@@ -78,22 +78,22 @@ export default function ClientesPage() {
         <MetricCard
           label="Clientes Totais"
           value={customers.length.toString()}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Valor Total (LTV)"
           value={formatBRL(totalLTV)}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Pedidos"
           value={totalOrders.toString()}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Ticket Médio"
           value={formatBRL(avgOrderValue)}
-          accentColor="#082d74"
+          accentColor="navy"
         />
       </div>
 

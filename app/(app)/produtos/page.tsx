@@ -78,22 +78,22 @@ export default function ProdutosPage() {
         <MetricCard
           label="Receita Total"
           value={formatBRL(totalRevenue)}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Produtos"
           value={products.length.toString()}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Vendas"
           value={totalSales.toString()}
-          accentColor="#082d74"
+          accentColor="navy"
         />
         <MetricCard
           label="Preço Médio"
           value={formatBRL(avgPrice)}
-          accentColor="#082d74"
+          accentColor="navy"
         />
       </div>
 

@@ -32,11 +32,11 @@ const BUCKET_LABEL: Record<'realizado' | 'contratado', string> = {
 const getAgingBadgeVariant = (bucket: AgingBucket | null): 'destructive' | 'warning' | 'success' | 'default' => {
   if (!bucket) return 'default'
   switch (bucket) {
-    case 'vencida':
+    case 'vencido':
       return 'destructive'
-    case 'vence-hoje':
+    case '0-7':
       return 'warning'
-    case 'vence-em-7-dias':
+    case '8-15':
       return 'warning'
     default:
       return 'success'
@@ -141,9 +141,9 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                 <tr
                   key={row.id}
                   className={`border-b last:border-0 transition-colors ${
-                    row.agingBucket === 'vencida'
+                    row.agingBucket === 'vencido'
                       ? 'bg-destructive/5 hover:bg-destructive/10'
-                      : row.agingBucket === 'vence-hoje'
+                      : row.agingBucket === '0-7'
                         ? 'bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/20 dark:hover:bg-yellow-900/30'
                         : 'hover:bg-muted/50'
                   }`}
@@ -180,9 +180,9 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
             <div
               key={row.id}
               className={`rounded-lg border p-3 transition-colors ${
-                row.agingBucket === 'vencida'
+                row.agingBucket === 'vencido'
                   ? 'bg-destructive/5 border-destructive/20'
-                  : row.agingBucket === 'vence-hoje'
+                  : row.agingBucket === '0-7'
                     ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
                     : 'bg-card border-border'
               }`}
