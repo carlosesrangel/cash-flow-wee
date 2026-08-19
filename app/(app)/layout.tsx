@@ -1,14 +1,9 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNavToggle } from '@/components/layout/mobile-nav-toggle'
-import { redirect } from 'next/navigation'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const member = await getCurrentMember()
-
-  if (!member) {
-    redirect('/criar-organizacao')
-  }
 
   return (
     <div className="flex min-h-screen">

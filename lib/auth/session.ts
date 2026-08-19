@@ -26,11 +26,46 @@ export async function getCurrentMember(): Promise<CurrentMember> {
     throw new Error(`Falha ao carregar membership do usuário: ${error.message}`)
   }
 
-  if (!data) return null
+  if (data) {
+    return {
+      orgId: data.org_id,
+      profileId: data.profile_id,
+      role: data.role as OrganizationRole,
+    }
+  }
+
+  // Usuário não tem organização — criar uma padrão automaticamente
+  const orgName = user.email ? user.email.split('@')[0] : 'Minha Organização'
+
+  const { data: newOrg, error: orgError } = await supabase
+    .from('organizations')
+    .insert([{ name: orgName }])
+    .select('id')
+    .single()
+
+  if (orgError || !newOrg) {
+    throw new Error(`Falha ao criar organização padrão: ${orgError?.message || 'Desconhecido'}`)
+  }
+
+  const { data: newMember, error: memberError } = await supabase
+    .from('organization_members')
+    .insert([
+      {
+        org_id: newOrg.id,
+        profile_id: user.id,
+        role: 'OWNER_ADMIN',
+      },
+    ])
+    .select('org_id, profile_id, role')
+    .single()
+
+  if (memberError || !newMember) {
+    throw new Error(`Falha ao criar membership: ${memberError?.message || 'Desconhecido'}`)
+  }
 
   return {
-    orgId: data.org_id,
-    profileId: data.profile_id,
-    role: data.role as OrganizationRole,
+    orgId: newMember.org_id,
+    profileId: newMember.profile_id,
+    role: newMember.role as OrganizationRole,
   }
 }

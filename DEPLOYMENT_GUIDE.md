@@ -53,7 +53,7 @@ git push -u origin main
 
 ### 2.2 Obter Credenciais Supabase
 1. Ir para "Project Settings" → "API"
-2. Copiar:
+2. Copiar as chaves para seu `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL` (Project URL)
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (anon/public key)
    - `SUPABASE_SERVICE_ROLE_KEY` (Service role key)
