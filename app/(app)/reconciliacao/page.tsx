@@ -2,12 +2,15 @@ import { getCurrentMember } from '@/lib/auth/session'
 import { canManageReconciliation } from '@/lib/auth/rbac'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ReconciliationTable, type MatchRow } from '@/components/reconciliation/reconciliation-table'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function ReconciliacaoPage() {
   const member = await getCurrentMember()
 
   if (!member) {
-    return <p className="text-sm text-neutral-500">Faça login para ver a reconciliação.</p>
+    return <EmptyState title="Acesso negado" description="Faça login para ver a reconciliação." />
   }
 
   const supabase = await createServerSupabaseClient()
@@ -24,8 +27,15 @@ export default async function ReconciliacaoPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Reconciliação Financeira</h1>
-      <ReconciliationTable matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} />
+      <PageHeader
+        title="Reconciliação Financeira"
+        description="Vinculação entre recebíveis, transações SumUp e saldo confirmado"
+      />
+      <Card>
+        <CardContent className="pt-6">
+          <ReconciliationTable matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

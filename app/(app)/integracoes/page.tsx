@@ -4,6 +4,7 @@ import { getOlistConnectionStatus } from '@/lib/olist/status'
 import { checkSumupStatus } from '@/lib/sumup/status'
 import { OlistCard } from '@/components/integrations/olist-card'
 import { SumupCard } from '@/components/integrations/sumup-card'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default async function IntegracoesPage() {
   const member = await getCurrentMember()
@@ -21,7 +22,10 @@ export default async function IntegracoesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Saúde das Integrações</h1>
+      <PageHeader
+        title="Saúde das Integrações"
+        description="Status de conexão com Olist ERP e SumUp"
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <OlistCard
           status={olistStatus.status}

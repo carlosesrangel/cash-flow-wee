@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getCurrentMember } from '@/lib/auth/session'
 import { canCreateScenario } from '@/lib/auth/rbac'
 import { loadScenarios } from '@/lib/forecast/engine'
+import { PageHeader } from '@/components/ui/page-header'
 import { CenariosContent } from './content'
 
 export default async function CenariosPage() {
@@ -15,12 +16,15 @@ export default async function CenariosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Cenários de Projeção</h1>
-        <Link href="/planejamento/forecast-vs-realizado" className="text-sm text-neutral-600 underline">
-          Forecast vs Realizado
-        </Link>
-      </div>
+      <PageHeader
+        title="Cenários de Projeção"
+        description="Crie e simule diferentes cenários de projeção de fluxo de caixa"
+        action={
+          <Link href="/planejamento/forecast-vs-realizado" className="text-sm text-primary hover:underline">
+            Forecast vs Realizado
+          </Link>
+        }
+      />
 
       <CenariosContent scenarios={scenarios} canCreate={canCreate} />
     </div>

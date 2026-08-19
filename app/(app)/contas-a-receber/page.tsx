@@ -6,11 +6,14 @@ import { computeAgingBucket } from '@/lib/cash-flow/aging'
 import { loadReconciledCashDates } from '@/lib/cash-flow/engine'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { AccountsReceivableTable, type AccountsReceivableRow } from '@/components/cash-flow/accounts-receivable-table'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function ContasAReceberPage() {
   const member = await getCurrentMember()
   if (!member) {
-    return <p className="text-sm text-neutral-500">Faça login para ver as contas a receber.</p>
+    return <EmptyState title="Acesso negado" description="Faça login para ver as contas a receber." />
   }
 
   const supabase = await createServerSupabaseClient()
@@ -48,8 +51,16 @@ export default async function ContasAReceberPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Contas a Receber</h1>
-      <AccountsReceivableTable rows={rows} today={today} />
+      <PageHeader
+        title="Contas a Receber"
+        subtitle="Recebíveis em Aberto"
+        description="Acompanhe seus direitos financeiros e datas de recebimento"
+      />
+      <Card>
+        <CardContent className="pt-6">
+          <AccountsReceivableTable rows={rows} today={today} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

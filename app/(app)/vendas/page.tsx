@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { SalesSummaryCard } from '@/components/analytics/sales-summary-card'
 import { RevenueTrendList } from '@/components/analytics/revenue-trend-list'
 import { TopCustomersCard } from '@/components/analytics/top-customers-card'
@@ -58,61 +61,65 @@ export default function VendasPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center">
-        <p className="text-lg text-slate-600">Carregando analytics...</p>
+      <div className="space-y-6">
+        <PageHeader title="Vendas" />
+        <Card>
+          <CardContent className="pt-6">
+            <Skeleton className="h-96" />
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center">
-        <p className="text-lg text-slate-600">Erro ao carregar dados.</p>
+      <div className="space-y-6">
+        <PageHeader title="Vendas" description="Não há dados de vendas disponíveis" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      <div className="space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="space-y-2 mb-10">
-            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Análise de Vendas</h1>
-            <p className="text-lg text-slate-600">Últimos 90 dias: receita, clientes e produtos</p>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Vendas"
+        description="Últimos 90 dias: receita, clientes e produtos"
+      />
 
-          {/* KPI Summary */}
-          <div className="mb-10">
-            <SalesSummaryCard summary={data.summary} />
-          </div>
+      <SalesSummaryCard summary={data.summary} />
 
-          {/* Revenue Trend & Monthly */}
-          <div className="grid gap-6 lg:grid-cols-2 mb-8">
-            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-              <RevenueTrendList data={data.timeSeries} />
-            </div>
-            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-              <MonthlyRevenueCard data={data.monthly} />
-            </div>
-          </div>
-
-          {/* Customers & Products */}
-          <div className="grid gap-6 lg:grid-cols-2 mb-8">
-            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-              <TopCustomersCard customers={data.topCustomers} />
-            </div>
-            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-              <ProductsRevenueCard products={data.products} />
-            </div>
-          </div>
-
-          {/* Variance */}
-          <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
-            <VarianceCard data={data.variance} />
-          </div>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="pt-6">
+            <RevenueTrendList data={data.timeSeries} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <MonthlyRevenueCard data={data.monthly} />
+          </CardContent>
+        </Card>
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="pt-6">
+            <TopCustomersCard customers={data.topCustomers} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <ProductsRevenueCard products={data.products} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <VarianceCard data={data.variance} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

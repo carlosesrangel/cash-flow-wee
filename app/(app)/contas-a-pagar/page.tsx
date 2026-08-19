@@ -4,11 +4,14 @@ import { classifyAccountsPayable } from '@/lib/cash-flow/classify'
 import { computeAgingBucket } from '@/lib/cash-flow/aging'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function ContasAPagarPage() {
   const member = await getCurrentMember()
   if (!member) {
-    return <p className="text-sm text-neutral-500">Faça login para ver as contas a pagar.</p>
+    return <EmptyState title="Acesso negado" description="Faça login para ver as contas a pagar." />
   }
 
   const supabase = await createServerSupabaseClient()
@@ -43,8 +46,16 @@ export default async function ContasAPagarPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Contas a Pagar</h1>
-      <AccountsPayableTable rows={rows} today={today} />
+      <PageHeader
+        title="Contas a Pagar"
+        subtitle="Próximos Vencimentos"
+        description="Acompanhe suas obrigações financeiras e datas de vencimento"
+      />
+      <Card>
+        <CardContent className="pt-6">
+          <AccountsPayableTable rows={rows} today={today} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

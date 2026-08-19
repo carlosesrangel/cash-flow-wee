@@ -3,6 +3,7 @@ import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engi
 import { aggregateByDay } from '@/lib/cash-flow/aggregate'
 import { shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
+import { PageHeader } from '@/components/ui/page-header'
 import { DailyTable } from '@/components/cash-flow/daily-table'
 
 export default async function FluxoDeCaixaDiarioPage() {
@@ -21,10 +22,10 @@ export default async function FluxoDeCaixaDiarioPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Fluxo de Caixa — Diário</h1>
-      <p className="text-sm text-neutral-500">
-        Período: {from} a {to}. Clique em um dia para ver os lançamentos que o compõem.
-      </p>
+      <PageHeader
+        title="Fluxo de Caixa — Diário"
+        description={`Período: ${from} a ${to}. Clique em um dia para ver os lançamentos que o compõem.`}
+      />
       <DailyTable days={days} entries={entries} />
     </div>
   )

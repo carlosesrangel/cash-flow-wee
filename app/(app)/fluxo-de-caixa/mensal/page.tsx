@@ -4,6 +4,7 @@ import { loadForecastedCashFlowEntries, mergeCashFlowWithForecast } from '@/lib/
 import { loadCashFlowWithPlannedPayments } from '@/lib/cash-flow/with-payments'
 import { aggregateByDay } from '@/lib/cash-flow/aggregate'
 import { toLocalDateParam } from '@/lib/integrations/date'
+import { PageHeader } from '@/components/ui/page-header'
 import { DailyTable } from '@/components/cash-flow/daily-table'
 import { ForecastToggle } from '@/components/cash-flow/forecast-toggle'
 import { PaymentsToggle } from '@/components/cash-flow/payments-toggle'
@@ -44,7 +45,6 @@ export default async function FluxoDeCaixaMensalPage({
 
   if (showPayments) {
     entries = await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
-    // Merge with forecast if both enabled
     if (showForecast) {
       const forecastEntries = await loadForecastedCashFlowEntries(member.orgId)
       const now = new Date()
@@ -59,7 +59,10 @@ export default async function FluxoDeCaixaMensalPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Fluxo de Caixa — Mensal</h1>
+      <PageHeader
+        title="Fluxo de Caixa — Mensal"
+        description="Visualize o fluxo de caixa mês a mês com opções de forecast e pagamentos planejados"
+      />
       <div className="flex flex-wrap items-center gap-4">
         <form className="flex items-center gap-2">
           <label htmlFor="mes" className="text-sm text-neutral-600">
