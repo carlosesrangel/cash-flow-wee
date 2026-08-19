@@ -1,28 +1,13 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { Sidebar } from '@/components/layout/sidebar'
-import { SignOutButton } from '@/components/layout/sign-out-button'
 import { MobileNavToggle } from '@/components/layout/mobile-nav-toggle'
-import { Card, CardContent } from '@/components/ui/card'
+import { redirect } from 'next/navigation'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const member = await getCurrentMember()
 
   if (!member) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30">
-        <Card className="w-full max-w-sm">
-          <CardContent className="space-y-4 pt-6 text-center">
-            <h1 className="font-heading text-xl font-semibold text-foreground">Sem acesso</h1>
-            <p className="text-sm text-muted-foreground">
-              Sua conta está autenticada, mas ainda não está vinculada a nenhuma organização.
-              Entre em contato com um administrador para receber acesso, ou saia e tente com outra
-              conta.
-            </p>
-            <SignOutButton className="w-full rounded-sm bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" />
-          </CardContent>
-        </Card>
-      </main>
-    )
+    redirect('/criar-organizacao')
   }
 
   return (
