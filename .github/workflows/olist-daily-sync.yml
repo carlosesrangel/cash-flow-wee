@@ -1,0 +1,233 @@
+name: Sincronização Olist Diária
+
+on:
+  schedule:
+    # Executa diariamente às 02:00 AM (UTC) = 23:00 BRT (previous day)
+    # Horário escolhido: fora do horário de pico
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:
+    # Permite disparo manual via GitHub UI
+    # Actions → Sincronização Olist Diária → Run workflow
+
+jobs:
+  sync-olist:
+    name: Sincronizar dados Olist
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --omit=dev
+
+      - name: Disparar sincronização para todas as organizações
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+          SYNC_API_TOKEN: ${{ secrets.SYNC_API_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node -e "
+          const https = require('https');
+
+          const siteUrl = process.env.VERCEL_URL
+            ? \`https://\${process.env.VERCEL_URL}\`
+            : 'https://cash-flow-wee.vercel.app';
+
+          console.log('🚀 Iniciando sincronização Olist...');
+          console.log('URL:', siteUrl);
+
+          const req = https.request(
+            \`\${siteUrl}/api/integracoes/olist/sync-all\`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': \`Bearer \${process.env.SYNC_API_TOKEN}\`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 28 * 60 * 1000  // 28 min timeout
+            },
+            (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                try {
+                  const result = JSON.parse(data);
+                  if (result.ok) {
+                    console.log('✅ Sincronização iniciada com sucesso');
+                    console.log(result);
+                    process.exit(0);
+                  } else {
+                    console.error('❌ Erro na sincronização:', result);
+                    process.exit(1);
+                  }
+                } catch (e) {
+                  console.error('❌ Erro ao parsear resposta:', data);
+                  process.exit(1);
+                }
+              });
+            }
+          );
+
+          req.on('error', (err) => {
+            console.error('❌ Erro na requisição:', err);
+            process.exit(1);
+          });
+
+          req.end();
+          "
+
+      - name: Verificar status de sync
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          (async () => {
+            // Buscar últimos syncs (últimas 2 horas)
+            const { data, error } = await supabase
+              .from('sync_runs')
+              .select('org_id, integration, status, started_at, completed_at, error_message')
+              .eq('integration', 'olist')
+              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString())
+              .order('started_at', { ascending: false });
+
+            if (error) {
+              console.error('Erro ao buscar status:', error);
+              return;
+            }
+
+            if (!data || data.length === 0) {
+              console.log('ℹ️ Nenhuma sincronização encontrada nas últimas 2 horas');
+              return;
+            }
+
+            console.log('📊 Status dos últimos syncs:');
+            data.forEach(sync => {
+              const icon = sync.status === 'success' ? '✅' :
+                          sync.status === 'running' ? '⏳' : '❌';
+              console.log(\`  \${icon} Org: \${sync.org_id.substring(0,8)}... Status: \${sync.status}\`);
+              if (sync.error_message) {
+                console.log(\`     Erro: \${sync.error_message}\`);
+              }
+            });
+          })();
+          "
+
+      - name: Notificar sucesso (Slack - opcional)
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z \"\$SLACK_WEBHOOK_URL\" ]; then
+            echo \"ℹ️ Slack webhook não configurado, pulando notificação\"
+            exit 0
+          fi
+
+          curl -X POST \"\$SLACK_WEBHOOK_URL\" \
+            -H 'Content-type: application/json' \
+            -d '{
+              \"text\": \"✅ Sincronização Olist concluída com sucesso\",
+              \"blocks\": [
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*✅ Sincronização Olist Diária*\n*Status:* Concluído com sucesso\n*Horário:* '$(date '+%d/%m/%Y %H:%M:%S')' (BRT)\"
+                  }
+                }
+              ]
+            }'
+
+      - name: Notificar falha (Slack - opcional)
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z \"\$SLACK_WEBHOOK_URL\" ]; then
+            echo \"ℹ️ Slack webhook não configurado\"
+            exit 0
+          fi
+
+          curl -X POST \"\$SLACK_WEBHOOK_URL\" \
+            -H 'Content-type: application/json' \
+            -d '{
+              \"text\": \"❌ Sincronização Olist falhou\",
+              \"blocks\": [
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*❌ Sincronização Olist Diária Falhou*\n*Horário:* '$(date '+%d/%m/%Y %H:%M:%S')' (BRT)\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos>\"
+                  }
+                }
+              ]
+            }'
+
+  # Job adicional: Notificar se nenhuma sincronização rodou (health check)
+  health-check:
+    name: Verificar saúde de sincronizações
+    runs-on: ubuntu-latest
+    needs: sync-olist
+    if: always()  # Roda mesmo que sync-olist falhe
+
+    steps:
+      - name: Verificar últimos syncs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          (async () => {
+            // Contar sucessos e falhas nas últimas 2 horas
+            const { data: successes } = await supabase
+              .from('sync_runs')
+              .select('id')
+              .eq('integration', 'olist')
+              .eq('status', 'success')
+              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString());
+
+            const { data: failures } = await supabase
+              .from('sync_runs')
+              .select('id')
+              .eq('integration', 'olist')
+              .eq('status', 'failed')
+              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString());
+
+            const successCount = (successes || []).length;
+            const failureCount = (failures || []).length;
+
+            console.log(\`📊 Sincronizações nas últimas 2 horas:\`);
+            console.log(\`   ✅ Sucesso: \${successCount}\`);
+            console.log(\`   ❌ Falhas: \${failureCount}\`);
+
+            if (successCount === 0 && failureCount === 0) {
+              console.log(\`⚠️  Nenhuma sincronização rodou (pode indicar problema)\`);
+            }
+          })();
+          "
