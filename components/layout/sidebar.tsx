@@ -20,18 +20,14 @@ export function Sidebar({ className }: { className?: string }) {
     >
       {/* Logo */}
       <div className="mb-8 flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded"
-          style={{ backgroundColor: 'var(--brand-parchment)' }}
-        >
+        <div className="flex h-12 w-12 items-center justify-center">
           <Image
             src="/logo2.jpg"
             alt="WEE"
-            width={32}
-            height={32}
+            width={48}
+            height={48}
             style={{
               objectFit: 'contain',
-              filter: 'brightness(1.1) contrast(1.2)',
             }}
           />
         </div>
