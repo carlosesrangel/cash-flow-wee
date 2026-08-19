@@ -1,3 +1,5 @@
+'use client'
+
 import type { CashFlowDay } from '@/lib/cash-flow/aggregate'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
