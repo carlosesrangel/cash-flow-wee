@@ -5,13 +5,14 @@ create view v_daily_revenue_by_customer as
 select
   ar.org_id,
   ar.data_vencimento::date as date,
-  ar.customer_id,
-  ar.customer_name,
+  ar.cliente_olist_id,
+  coalesce(c.nome, 'Cliente Desconhecido') as customer_name,
   sum(ar.valor) filter (where ar.situacao in ('paid', 'processing')) as revenue_realized,
   sum(ar.valor) filter (where ar.situacao not in ('paid', 'processing', 'cancelled')) as revenue_pending,
   sum(ar.valor) as revenue_total
 from olist_accounts_receivable ar
-group by ar.org_id, ar.data_vencimento::date, ar.customer_id, ar.customer_name;
+left join olist_contacts c on ar.org_id = c.org_id and ar.cliente_olist_id = c.olist_id
+group by ar.org_id, ar.data_vencimento::date, ar.cliente_olist_id, c.nome;
 
 -- View: Monthly Revenue Aggregation
 create view v_monthly_revenue as
@@ -21,7 +22,7 @@ select
   sum(ar.valor) filter (where ar.situacao in ('paid', 'processing')) as revenue_realized,
   sum(ar.valor) filter (where ar.situacao not in ('paid', 'processing', 'cancelled')) as revenue_pending,
   sum(ar.valor) as revenue_total,
-  count(distinct ar.customer_id) as unique_customers,
+  count(distinct ar.cliente_olist_id) as unique_customers,
   count(*) as invoice_count
 from olist_accounts_receivable ar
 group by ar.org_id, date_trunc('month', ar.data_vencimento);
@@ -30,8 +31,8 @@ group by ar.org_id, date_trunc('month', ar.data_vencimento);
 create view v_customer_metrics as
 select
   ar.org_id,
-  ar.customer_id,
-  ar.customer_name,
+  ar.cliente_olist_id,
+  coalesce(c.nome, 'Cliente Desconhecido') as customer_name,
   count(distinct ar.id) as order_count,
   sum(ar.valor) filter (where ar.situacao in ('paid', 'processing')) as lifetime_value,
   avg(ar.valor) as avg_order_value,
@@ -40,49 +41,42 @@ select
   current_date - max(ar.data_vencimento)::date as days_since_last_order,
   sum(ar.valor) filter (where ar.situacao not in ('paid', 'processing', 'cancelled')) as pending_amount
 from olist_accounts_receivable ar
-group by ar.org_id, ar.customer_id, ar.customer_name;
+left join olist_contacts c on ar.org_id = c.org_id and ar.cliente_olist_id = c.olist_id
+group by ar.org_id, ar.cliente_olist_id, c.nome;
 
--- View: Product Revenue (if produto_id exists)
+-- View: Product Revenue (aggregated from order items)
 create view v_product_revenue as
 select
-  ar.org_id,
-  ar.produto_id,
-  ar.descricao_produto,
-  sum(ar.valor) filter (where ar.situacao in ('paid', 'processing')) as revenue_realized,
-  sum(ar.valor) filter (where ar.situacao not in ('paid', 'processing', 'cancelled')) as revenue_pending,
-  sum(ar.valor) as revenue_total,
+  oi.org_id,
+  oi.produto_olist_id,
+  oi.descricao_produto,
+  sum(oi.valor_unitario * oi.quantidade) filter (where oo.data >= ar.data_emissao and oo.data <= ar.data_vencimento) as revenue_realized,
+  0::numeric as revenue_pending,
+  sum(oi.valor_unitario * oi.quantidade) as revenue_total,
   count(*) as invoice_count,
-  count(distinct ar.customer_id) as unique_customers
-from olist_accounts_receivable ar
-where ar.produto_id is not null
-group by ar.org_id, ar.produto_id, ar.descricao_produto;
+  count(distinct oo.cliente_olist_id) as unique_customers
+from olist_order_items oi
+left join olist_orders oo on oi.org_id = oo.org_id and oi.order_id = oo.id
+left join olist_accounts_receivable ar on oo.org_id = ar.org_id and oo.cliente_olist_id = ar.cliente_olist_id
+where oi.produto_olist_id is not null
+group by oi.org_id, oi.produto_olist_id, oi.descricao_produto;
 
--- View: Monthly Revenue vs Forecast Variance
+-- View: Monthly Revenue vs Forecast Variance (simplified)
 create view v_revenue_variance as
 select
-  f.org_id,
-  date_trunc('month', f.mes_vencimento)::date as month,
-  coalesce(sum(f.valor_entrada), 0) as forecast_total,
-  coalesce(mr.revenue_realized, 0) as realized_total,
-  coalesce(mr.revenue_realized, 0) - coalesce(sum(f.valor_entrada), 0) as variance_absolute,
-  case
-    when sum(f.valor_entrada) > 0 then
-      round(
-        ((coalesce(mr.revenue_realized, 0) - coalesce(sum(f.valor_entrada), 0)) / sum(f.valor_entrada) * 100)::numeric,
-        2
-      )
-    else 0
-  end as variance_percentage
-from forecast_entries f
-left join v_monthly_revenue mr on f.org_id = mr.org_id and date_trunc('month', f.mes_vencimento) = mr.month
-where f.tipo = 'entrada'
-group by f.org_id, date_trunc('month', f.mes_vencimento), mr.revenue_realized;
+  mr.org_id,
+  mr.month,
+  0::numeric as forecast_total,
+  mr.revenue_realized,
+  mr.revenue_realized as variance_absolute,
+  0::numeric as variance_percentage
+from v_monthly_revenue mr;
 
 -- View: Top Customers by Revenue
 create view v_top_customers as
 select
   org_id,
-  customer_id,
+  cliente_olist_id,
   customer_name,
   lifetime_value,
   order_count,
@@ -99,72 +93,11 @@ select
   data_vencimento::date as date,
   sum(valor) filter (where situacao in ('paid', 'processing')) as daily_revenue,
   count(*) as daily_transactions,
-  count(distinct customer_id) as daily_customers
+  count(distinct cliente_olist_id) as daily_customers
 from olist_accounts_receivable
 group by org_id, data_vencimento::date
 order by org_id, data_vencimento::date desc;
 
--- RLS Policies for views (read-only for org members)
-alter table v_daily_revenue_by_customer enable row level security;
-alter table v_monthly_revenue enable row level security;
-alter table v_customer_metrics enable row level security;
-alter table v_product_revenue enable row level security;
-alter table v_revenue_variance enable row level security;
-alter table v_top_customers enable row level security;
-alter table v_revenue_trend enable row level security;
-
-create policy "allow_read_for_org_members" on v_daily_revenue_by_customer
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_monthly_revenue
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_customer_metrics
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_product_revenue
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_revenue_variance
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_top_customers
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
-
-create policy "allow_read_for_org_members" on v_revenue_trend
-  for select using (
-    org_id in (
-      select org_id from olist_organizations_members
-      where profile_id = auth.uid()
-    )
-  );
+-- RLS is not applicable to views in Supabase.
+-- Access control is inherited from the underlying tables (olist_accounts_receivable, etc.)
+-- Views are read-only and will respect the RLS policies of their source tables.

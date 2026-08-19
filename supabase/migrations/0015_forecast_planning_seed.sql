@@ -2,7 +2,10 @@
 -- afterward through the Planejamento/Cenários screens — this is a
 -- starting point, not a hardcoded projection (seção 14: "Nunca hardcodar
 -- a projeção no código" — this lives in the database, not in app code).
+-- COMMENTED OUT: Seed data is created per-org by the app, not hardcoded.
+-- Users will set up their own forecast versions via the UI.
 
+/*
 with version as (
   insert into forecast_versions (org_id, name)
   values ('00000000-0000-0000-0000-000000000001', 'Planejamento Original')
@@ -48,3 +51,4 @@ from forecast_scenarios s
 join scenario_percentuais sp on sp.name = s.name
 cross join meses m
 where s.org_id = '00000000-0000-0000-0000-000000000001';
+*/
