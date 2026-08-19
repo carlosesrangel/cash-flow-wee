@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function CreateOrganizationPage() {
   const router = useRouter()
@@ -26,7 +24,6 @@ export default function CreateOrganizationPage() {
     const supabase = createBrowserSupabaseClient()
 
     try {
-      // Get current user
       const {
         data: { user },
         error: userError,
@@ -37,7 +34,6 @@ export default function CreateOrganizationPage() {
         return
       }
 
-      // Create organization
       const { data: org, error: orgError } = await supabase
         .from('organizations')
         .insert([{ name: name.trim() }])
@@ -54,7 +50,6 @@ export default function CreateOrganizationPage() {
         return
       }
 
-      // Add user as OWNER_ADMIN
       const { error: memberError } = await supabase
         .from('organization_members')
         .insert([
@@ -70,7 +65,6 @@ export default function CreateOrganizationPage() {
         return
       }
 
-      // Redirect to dashboard
       router.push('/visao-geral')
       router.refresh()
     } catch (err) {
@@ -82,38 +76,36 @@ export default function CreateOrganizationPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Criar Organização</CardTitle>
-          <CardDescription>
-            Crie uma organização para começar a usar o WEE Fluxo de Caixa
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium">
-                Nome da Organização
-              </label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Minha Empresa"
-                required
-                disabled={loading}
-              />
-            </div>
+      <div className="w-full max-w-md rounded-lg border bg-white p-8 shadow-sm">
+        <h1 className="text-xl font-semibold">Criar Organização</h1>
+        <p className="mt-2 text-sm text-neutral-600">
+          Crie uma organização para começar a usar o WEE Fluxo de Caixa
+        </p>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="name" className="text-sm font-medium">
+              Nome da Organização
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Minha Empresa"
+              required
+              disabled={loading}
+              className="w-full rounded border px-3 py-2 text-sm disabled:opacity-50"
+            />
+          </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Criando...' : 'Criar Organização'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Criando...' : 'Criar Organização'}
+          </Button>
+        </form>
+      </div>
     </main>
   )
 }
