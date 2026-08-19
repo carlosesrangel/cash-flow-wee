@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { MetricCard } from '@/components/ui/metric-card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Package } from 'lucide-react'
 
@@ -52,6 +53,9 @@ export default function ProdutosPage() {
   })
 
   const totalRevenue = products.reduce((sum, p) => sum + p.total, 0)
+  const totalSales = products.reduce((sum, p) => sum + p.invoiceCount, 0)
+  const totalCustomers = products.reduce((sum, p) => sum + p.uniqueCustomers, 0)
+  const avgPrice = totalSales > 0 ? totalRevenue / totalSales : 0
 
   if (products.length === 0) {
     return (
@@ -66,10 +70,34 @@ export default function ProdutosPage() {
     <div className="space-y-6">
       <PageHeader
         title="Produtos"
-        subtitle={`${products.length} produtos`}
-        description="Visualize receita, vendas e volume de clientes por produto"
+        description="Últimos 90 dias: receita, vendas e clientes por produto"
       />
 
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Receita Total"
+          value={formatBRL(totalRevenue)}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Produtos"
+          value={products.length.toString()}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Vendas"
+          value={totalSales.toString()}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Preço Médio"
+          value={formatBRL(avgPrice)}
+          accentColor="#082d74"
+        />
+      </div>
+
+      {/* Product List */}
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">

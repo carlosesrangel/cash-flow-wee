@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { MetricCard } from '@/components/ui/metric-card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Users } from 'lucide-react'
 
@@ -52,6 +53,10 @@ export default function ClientesPage() {
     return 0
   })
 
+  const totalLTV = customers.reduce((sum, c) => sum + c.lifetimeValue, 0)
+  const totalOrders = customers.reduce((sum, c) => sum + c.orderCount, 0)
+  const avgOrderValue = customers.length > 0 ? totalLTV / totalOrders : 0
+
   if (customers.length === 0) {
     return (
       <div className="space-y-6">
@@ -65,10 +70,34 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Clientes"
-        subtitle={`${customers.length} clientes`}
-        description="Visualize métricas de clientes e histórico de compras"
+        description="Últimos 90 dias: clientes, compras e valor de vida"
       />
 
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Clientes Totais"
+          value={customers.length.toString()}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Valor Total (LTV)"
+          value={formatBRL(totalLTV)}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Pedidos"
+          value={totalOrders.toString()}
+          accentColor="#082d74"
+        />
+        <MetricCard
+          label="Ticket Médio"
+          value={formatBRL(avgOrderValue)}
+          accentColor="#082d74"
+        />
+      </div>
+
+      {/* Customer List */}
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
