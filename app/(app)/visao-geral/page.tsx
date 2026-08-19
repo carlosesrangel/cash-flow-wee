@@ -94,9 +94,6 @@ export default async function VisaoGeralPage() {
           <div className="flex items-center gap-4">
             <div
               style={{
-                backgroundColor: '#efece3',
-                borderRadius: '4px',
-                padding: '6px 8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -105,11 +102,10 @@ export default async function VisaoGeralPage() {
               <Image
                 src="/logo2.jpg"
                 alt="WEE"
-                width={28}
-                height={28}
+                width={40}
+                height={40}
                 style={{
                   objectFit: 'contain',
-                  filter: 'brightness(1.1) contrast(1.2)',
                 }}
               />
             </div>
