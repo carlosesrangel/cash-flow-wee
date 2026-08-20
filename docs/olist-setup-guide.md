@@ -103,16 +103,22 @@ curl -X POST http://localhost:3000/api/integracoes/olist/sync-all \
 
 ### 3.2 Adicionar Secrets
 
-Clique **New repository secret** para cada um:
+Clique **New repository secret** para cada um. O workflow roda a sincronização
+como processo Node comum dentro do runner (`npm run sync:olist`), não mais via
+chamada HTTP à Vercel — por isso precisa das credenciais Olist diretamente:
 
 | Nome | Valor | Origem |
 |------|-------|--------|
 | `SUPABASE_URL` | `https://xxx.supabase.co` | Supabase Dashboard → Project Settings → API → Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` (longa chave) | Supabase Dashboard → Project Settings → API → Service Role Secret |
-| `OLIST_REDIRECT_URI` | `https://seu-app.vercel.app/integracoes/olist/callback` | Seu domínio/URL do app |
-| `SYNC_API_TOKEN` | `a7f3b2c9d1e4...` (gerado no Step 2.2) | Token que você gerou |
-| `VERCEL_URL` | `seu-app.vercel.app` | (opcional) URL do Vercel |
+| `OLIST_CLIENT_ID` | (o mesmo de `.env.local`) | Painel Olist/Tiny → Configurações → Aplicativos |
+| `OLIST_CLIENT_SECRET` | (o mesmo de `.env.local`) | Painel Olist/Tiny → Configurações → Aplicativos |
+| `OLIST_STATE_SECRET` | (o mesmo de `.env.local`) | Gerado localmente (`openssl rand -hex 32`) |
 | `SLACK_WEBHOOK_URL` | (se quiser alertas) | Criar em Slack → Apps → Incoming Webhooks |
+
+`SYNC_API_TOKEN`, `VERCEL_URL` e `OLIST_REDIRECT_URI` não são mais usados pelo
+workflow diário (a rota HTTP da Vercel só é usada pelo botão manual do
+dashboard) — pode deixá-los configurados sem problema, ou removê-los.
 
 ### 3.3 Teste: Verificar que os secrets foram criados
 

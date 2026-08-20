@@ -26,6 +26,16 @@ export function OlistCard({ status, connectedAt, canManage }: Props) {
     setSyncError(null)
     try {
       const response = await fetch('/api/integracoes/olist/sync', { method: 'POST' })
+
+      if (response.status === 504 || response.status === 502) {
+        setSyncError(
+          'A sincronização inicial (histórico completo) demora mais do que o servidor web permite. ' +
+            'Rode `npm run sync:olist` localmente ou dispare o workflow "Sincronização Olist Diária" ' +
+            'no GitHub Actions — ambos não têm esse limite de tempo.'
+        )
+        return
+      }
+
       const data = await response.json()
       if (!response.ok || !data.ok) {
         setSyncError(data.error ?? 'Falha ao sincronizar')
@@ -33,7 +43,10 @@ export function OlistCard({ status, connectedAt, canManage }: Props) {
         router.refresh()
       }
     } catch {
-      setSyncError('Falha ao sincronizar')
+      setSyncError(
+        'Falha ao sincronizar. Se esta é a primeira sincronização (histórico completo), ' +
+          'rode `npm run sync:olist` localmente ou dispare o workflow no GitHub Actions em vez de usar este botão.'
+      )
     } finally {
       setSyncing(false)
     }

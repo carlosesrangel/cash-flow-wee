@@ -4,6 +4,13 @@ import { canManageIntegrations } from '@/lib/auth/rbac'
 import { runOlistSync } from '@/lib/olist/sync'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
+// A sincronização inicial completa (histórico de contas a receber, N+1 chamadas
+// de detalhe sob rate limit de 25 req/min da Olist) pode facilmente ultrapassar
+// 300s. maxDuration aqui só estica o teto até o máximo do plano — não resolve
+// o caso de histórico grande, que deve rodar via `npm run sync:olist` (local
+// ou GitHub Actions, sem teto de function serverless). Ver scripts/run-olist-sync.ts.
+export const maxDuration = 300
+
 const ACTIVE_SYNC_STALENESS_MS = 10 * 60 * 1000
 
 async function hasPriorSuccessfulSync(orgId: string): Promise<boolean> {

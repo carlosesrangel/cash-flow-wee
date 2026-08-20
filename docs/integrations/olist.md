@@ -2,6 +2,33 @@
 
 Status: implementada na Fase 2. API V3, OAuth2.
 
+## Execução da sincronização
+
+A sincronização **não roda mais via HTTP contra a function da Vercel** para o
+caso agendado/diário — só o botão manual "Sincronizar agora" do dashboard usa
+essa rota, e mesmo essa pode expirar (ver abaixo). Motivo: `/contas-receber`
+busca o detalhe de cada conta individualmente (uma chamada HTTP por registro,
+independente do modo — `windowDays` de AP/AR não muda entre `initial` e
+`incremental`, só o de pedidos/contatos muda), sob um rate limit de 25
+req/min da Olist. Com ~600+ contas na conta real da WEE isso leva ~25
+minutos — acima do teto de 300s de uma function serverless da Vercel
+(`Vercel Runtime Timeout Error`, visto em produção em 2026-08-20).
+
+- **Diário/agendado:** `.github/workflows/olist-daily-sync.yml` roda
+  `npm run sync:olist` como processo Node comum dentro do runner do GitHub
+  Actions (`timeout-minutes: 30` — bem acima do pior caso observado).
+- **Manual/local:** `npm run sync:olist -- --org <id> [--mode initial|incremental]`.
+- **Manual via dashboard:** botão "Sincronizar agora" ainda chama
+  `/api/integracoes/olist/sync` (rota Vercel, `maxDuration = 300`) — funciona
+  para volumes pequenos, mas pode expirar se AP/AR tiver muitos registros
+  pendentes. Nesse caso, use o script ou dispare o workflow manualmente.
+
+Ver `scripts/run-olist-sync.ts` para a implementação. Precisa da flag
+`--conditions=react-server` (embutida no script npm `sync:olist`) porque os
+módulos de `lib/olist/*` e `lib/supabase/admin.ts` têm `import 'server-only'`,
+que lança erro fora do runtime de Server Components do Next quando rodado
+como processo Node comum.
+
 ## Autenticação
 
 - Base URL: `https://api.tiny.com.br/public-api/v3`

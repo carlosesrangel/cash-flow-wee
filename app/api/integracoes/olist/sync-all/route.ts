@@ -2,6 +2,11 @@ import { NextResponse, NextRequest } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { runOlistSync } from '@/lib/olist/sync'
 
+// Mantido apenas para uso pontual/manual — a sincronização diária agendada roda
+// via `npm run sync:olist` dentro do GitHub Actions (sem teto de 300s). Ver
+// scripts/run-olist-sync.ts e .github/workflows/olist-daily-sync.yml.
+export const maxDuration = 300
+
 /**
  * Sincronização em batch de Olist para TODAS as organizações conectadas.
  *
