@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react'
 import { formatBRL } from '@/lib/format/currency'
 import { AccountsReceivableTable, type AccountsReceivableRow } from '@/components/cash-flow/accounts-receivable-table'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, X } from 'lucide-react'
@@ -262,7 +261,7 @@ export function AccountsReceivableFilters({
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-xs text-muted-foreground">Mínimo</label>
-            <Input
+            <input
               type="number"
               placeholder="0"
               value={filters.minValue ?? ''}
@@ -272,12 +271,12 @@ export function AccountsReceivableFilters({
                   minValue: e.target.value ? parseFloat(e.target.value) : null,
                 }))
               }
-              className="text-sm"
+              className="w-full px-2 py-2 border rounded text-sm"
             />
           </div>
           <div className="flex-1">
             <label className="text-xs text-muted-foreground">Máximo</label>
-            <Input
+            <input
               type="number"
               placeholder="∞"
               value={filters.maxValue ?? ''}
@@ -287,7 +286,7 @@ export function AccountsReceivableFilters({
                   maxValue: e.target.value ? parseFloat(e.target.value) : null,
                 }))
               }
-              className="text-sm"
+              className="w-full px-2 py-2 border rounded text-sm"
             />
           </div>
         </div>
