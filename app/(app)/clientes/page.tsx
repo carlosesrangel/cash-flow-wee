@@ -36,20 +36,7 @@ export default function ClientesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Clientes" />
-        <Card>
-          <CardContent className="pt-6">
-            <Skeleton className="h-64" />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Calculate RFV scores for all customers
+  // Calculate RFV scores for all customers (must be before any early returns)
   const customersWithRFV = useMemo(() => {
     const allValues = customers.map((c) => c.lifetimeValue)
     return customers.map((c) => ({
@@ -62,6 +49,19 @@ export default function ClientesPage() {
       ),
     }))
   }, [customers])
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Clientes" />
+        <Card>
+          <CardContent className="pt-6">
+            <Skeleton className="h-64" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   // Filter by RFV segment if selected
   const filtered = rfvFilter
