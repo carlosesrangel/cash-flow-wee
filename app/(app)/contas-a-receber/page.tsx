@@ -52,7 +52,7 @@ export default async function ContasAReceberPage() {
 
   // Get unique clients for filter dropdown
   const clients = Array.from(
-    new Map(rows.filter((r) => r.clienteNome).map((r) => [r.clienteNome, r.clienteNome])).values()
+    new Map(rows.filter((r) => r.clienteNome).map((r) => [r.clienteNome!, r.clienteNome!])).values()
   ).sort()
 
   return (

@@ -47,7 +47,7 @@ export default async function ContasAPagarPage() {
 
   // Get unique suppliers for filter dropdown
   const suppliers = Array.from(
-    new Map(rows.filter((r) => r.fornecedorNome).map((r) => [r.fornecedorNome, r.fornecedorNome])).values()
+    new Map(rows.filter((r) => r.fornecedorNome).map((r) => [r.fornecedorNome!, r.fornecedorNome!])).values()
   ).sort()
 
   return (
