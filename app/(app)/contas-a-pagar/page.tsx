@@ -4,6 +4,7 @@ import { classifyAccountsPayable } from '@/lib/cash-flow/classify'
 import { computeAgingBucket } from '@/lib/cash-flow/aging'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
+import { AccountsPayableFilters } from '@/components/cash-flow/accounts-payable-filters'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -44,6 +45,11 @@ export default async function ContasAPagarPage() {
     }
   })
 
+  // Get unique suppliers for filter dropdown
+  const suppliers = Array.from(
+    new Map(rows.filter((r) => r.fornecedorNome).map((r) => [r.fornecedorNome, r.fornecedorNome])).values()
+  ).sort()
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -52,8 +58,8 @@ export default async function ContasAPagarPage() {
         description="Acompanhe suas obrigações financeiras e datas de vencimento"
       />
       <Card>
-        <CardContent className="pt-6">
-          <AccountsPayableTable rows={rows} today={today} />
+        <CardContent className="pt-6 space-y-6">
+          <AccountsPayableFilters rows={rows} suppliers={suppliers} today={today} />
         </CardContent>
       </Card>
     </div>

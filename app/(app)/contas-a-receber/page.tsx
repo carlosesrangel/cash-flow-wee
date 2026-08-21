@@ -6,6 +6,7 @@ import { computeAgingBucket } from '@/lib/cash-flow/aging'
 import { loadReconciledCashDates } from '@/lib/cash-flow/engine'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { AccountsReceivableTable, type AccountsReceivableRow } from '@/components/cash-flow/accounts-receivable-table'
+import { AccountsReceivableFilters } from '@/components/cash-flow/accounts-receivable-filters'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -49,6 +50,11 @@ export default async function ContasAReceberPage() {
     }
   })
 
+  // Get unique clients for filter dropdown
+  const clients = Array.from(
+    new Map(rows.filter((r) => r.clienteNome).map((r) => [r.clienteNome, r.clienteNome])).values()
+  ).sort()
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -57,8 +63,8 @@ export default async function ContasAReceberPage() {
         description="Acompanhe seus direitos financeiros e datas de recebimento"
       />
       <Card>
-        <CardContent className="pt-6">
-          <AccountsReceivableTable rows={rows} today={today} />
+        <CardContent className="pt-6 space-y-6">
+          <AccountsReceivableFilters rows={rows} clients={clients} today={today} />
         </CardContent>
       </Card>
     </div>

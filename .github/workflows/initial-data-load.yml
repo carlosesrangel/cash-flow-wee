@@ -1,0 +1,166 @@
+name: Carga Inicial de Dados
+
+on:
+  workflow_dispatch:
+    inputs:
+      integration:
+        description: 'Qual integração carregar?'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - olist-only
+          - sumup-only
+      org_id:
+        description: 'Organização específica (deixe em branco para todas)'
+        required: false
+        type: string
+
+jobs:
+  initial-load:
+    name: Carregar dados iniciais
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Este job pode levar até 90 minutos (45 min Olist + 45 min SumUp)
+    # para organizações com histórico de 3650 dias
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar carga inicial
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_STATE_SECRET: ${{ secrets.OLIST_STATE_SECRET }}
+          SUMUP_API_KEY: ${{ secrets.SUMUP_API_KEY }}
+          SUMUP_MERCHANT_CODE: ${{ secrets.SUMUP_MERCHANT_CODE }}
+        run: |
+          ARGS=""
+
+          # Adicionar flag de integração específica, se selecionada
+          if [ "${{ github.event.inputs.integration }}" != "both" ]; then
+            ARGS="--${{ github.event.inputs.integration }}"
+          fi
+
+          # Adicionar org específica, se fornecida
+          if [ -n "${{ github.event.inputs.org_id }}" ]; then
+            ARGS="$ARGS --org ${{ github.event.inputs.org_id }}"
+          fi
+
+          npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-initial-load.ts $ARGS
+
+      - name: Verificar status de sincronização
+        if: always()
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          (async () => {
+            const { data, error } = await supabase
+              .from('sync_runs')
+              .select('org_id, integration, status, started_at, finished_at, records_received, error_message')
+              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString())
+              .order('started_at', { ascending: false });
+
+            if (error) {
+              console.error('Erro ao buscar status:', error);
+              return;
+            }
+
+            if (!data || data.length === 0) {
+              console.log('ℹ️ Nenhuma sincronização encontrada');
+              return;
+            }
+
+            console.log('\\n📊 Status da Carga Inicial:');
+            console.log('━'.repeat(80));
+
+            data.forEach(sync => {
+              const icon = sync.status === 'success' ? '✅' :
+                          sync.status === 'running' ? '⏳' : '❌';
+              const orgShort = sync.org_id.substring(0, 8);
+              const records = sync.records_received || 0;
+              const duration = sync.finished_at ?
+                Math.round((new Date(sync.finished_at).getTime() - new Date(sync.started_at).getTime()) / 1000) :
+                'em andamento';
+
+              console.log(\`\${icon} \${sync.integration.toUpperCase()} | Org: \${orgShort}... | Status: \${sync.status} | Registros: \${records} | Duração: \${duration}s\`);
+
+              if (sync.error_message) {
+                console.log(\`   └─ Erro: \${sync.error_message.substring(0, 100)}\`);
+              }
+            });
+            console.log('━'.repeat(80));
+          })();
+          "
+
+      - name: Notificar sucesso (Slack - opcional)
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "ℹ️ Slack webhook não configurado"
+            exit 0
+          fi
+
+          curl -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            -d '{
+              "text": "✅ Carga Inicial de Dados Concluída",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*✅ Carga Inicial de Dados*\n*Status:* Concluído com sucesso\n*Integração:* ${{ github.event.inputs.integration }}\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)"
+                  }
+                }
+              ]
+            }'
+
+      - name: Notificar falha (Slack - opcional)
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "ℹ️ Slack webhook não configurado"
+            exit 0
+          fi
+
+          curl -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            -d '{
+              "text": "❌ Carga Inicial de Dados Falhou",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*❌ Carga Inicial de Dados Falhou*\n*Integração:* ${{ github.event.inputs.integration }}\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos>"
+                  }
+                }
+              ]
+            }'
