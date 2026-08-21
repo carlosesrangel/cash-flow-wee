@@ -20,27 +20,28 @@ export function Sidebar({ className }: { className?: string }) {
     >
       {/* Logo */}
       <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center">
+        <div className="flex h-16 w-16 items-center justify-center">
           <Image
             src="/logo2.jpg"
             alt="WEE"
-            width={48}
-            height={48}
+            width={64}
+            height={64}
             style={{
               objectFit: 'contain',
             }}
+            priority
           />
         </div>
         <div>
           <div
-            className="text-base font-semibold leading-tight"
-            style={{ fontFamily: 'var(--font-playfair)', color: 'var(--brand-navy)' }}
+            className="text-lg font-semibold leading-tight"
+            style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--brand-navy)' }}
           >
             WEE
           </div>
           <div
-            className="text-xs font-medium uppercase tracking-wider"
-            style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--brand-tan)' }}
+            className="text-sm font-semibold uppercase tracking-wider"
+            style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--brand-navy)' }}
           >
             Cash Flow
           </div>

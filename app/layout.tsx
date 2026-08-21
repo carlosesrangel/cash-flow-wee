@@ -33,6 +33,13 @@ const jost = Jost({
 export const metadata: Metadata = {
   title: "WEE Cash Flow & Business Intelligence Platform",
   description: "Plataforma de gestão de fluxo de caixa, tesouraria e inteligência financeira para pequenas empresas.",
+  icons: {
+    icon: [
+      { url: '/logo2.jpg', type: 'image/jpeg' },
+    ],
+    shortcut: '/logo2.jpg',
+    apple: '/logo2.jpg',
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
