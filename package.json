@@ -18,7 +18,8 @@
     "populate:analytics": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/populate-analytics.ts",
     "seed:forecast": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast.ts",
     "seed:forecast:60months": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast-60months.ts",
-    "seed:payment-scenarios": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-payment-scenarios.ts"
+    "seed:payment-scenarios": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-payment-scenarios.ts",
+    "apply:migrations": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/apply-migrations.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -21,49 +21,72 @@ function monthKey(ano: number, mes: number) {
 
 /**
  * CMV Defasagem: Q2 budget (Apr-Jun) is spent bi-weekly in Q1 (Jan-Mar).
- * Returns array of {ano_gasto, mes_gasto, semana, valor_cmv} entries.
+ * Simplified: For each quarter, allocate CMV to the previous quarter (3 months back)
  */
 function computeCMVDefasagem(baseRevenue: number): {
   ano: number; mes: number; semana: string; valor: number; trimestre_origem: string
 }[] {
   const cmvEntries: {ano: number; mes: number; semana: string; valor: number; trimestre_origem: string}[] = []
-  const cmvPercentual = 0.4 // CMV = 40% of revenue (example)
+  const cmvPercentual = 0.4 // CMV = 40% of revenue
 
-  // Each quarter's budget is spent in the previous quarter, distributed bi-weekly
-  const quarters = [
-    { origem: 'Q1-2026', gasto_em: { ano: 2025, mes: 10 } }, // Q1 2026 (Jan-Mar) spent in Q4 2025
-    { origem: 'Q2-2026', gasto_em: { ano: 2026, mes: 1 } }, // Q2 2026 (Apr-Jun) spent in Q1 2026
-    { origem: 'Q3-2026', gasto_em: { ano: 2026, mes: 4 } }, // Q3 2026 (Jul-Sep) spent in Q2 2026
-    { origem: 'Q4-2026', gasto_em: { ano: 2026, mes: 7 } }, // Q4 2026 (Oct-Dec) spent in Q3 2026
-    { origem: 'Q1-2027', gasto_em: { ano: 2026, mes: 10 } }, // Q1 2027 (Jan-Mar) spent in Q4 2026
-    // ... continue pattern for remaining years
-  ]
-
-  // Simplified: compute for 2026-2027 only; extends as needed
+  // For years 2026-2030, calculate CMV per quarter and allocate to previous quarter
   for (let ano = 2026; ano <= 2030; ano++) {
     for (let q = 1; q <= 4; q++) {
-      const mes_inicio = (q - 1) * 3 + 1 // Q1→1, Q2→4, Q3→7, Q4→10
-      const mes_gasto = q === 1 ? ((2025) % 1 + 12 + mes_inicio - 3) : (ano + Math.floor((mes_inicio - 3) / 12)) // prev quarter
-      const ano_gasto = q === 1 ? ano - 1 : ano
+      // Seasonal factors
+      const seasonal = q === 4 ? 1.4 : 1.0 // Q4 (Oct-Dec) is stronger
 
-      // Estimate revenue for this quarter as base * seasonal
-      const seasonalQ1 = 1.0,
-        seasonalQ2 = 1.0,
-        seasonalQ3 = 1.0,
-        seasonalQ4 = 1.4 // Nov/Dec stronger
-      const seasonal =
-        q === 1 ? seasonalQ1 : q === 2 ? seasonalQ2 : q === 3 ? seasonalQ3 : seasonalQ4
-
+      // Revenue for this quarter
       const quarter_revenue = baseRevenue * 3 * seasonal
       const quarter_cmv = quarter_revenue * cmvPercentual
       const cmv_per_semana = quarter_cmv / 4
 
-      // Distribute across 4 weeks (bi-weekly → semanas 1-4 of previous quarter)
-      for (let w = 1; w <= 4; w++) {
+      // Determine when to spend this CMV (previous quarter)
+      let ano_gasto = ano
+      let mes_gasto_start = (q - 1) * 3 + 1 // Q1→1, Q2→4, Q3→7, Q4→10
+
+      // Shift back one quarter (3 months)
+      mes_gasto_start -= 3
+      if (mes_gasto_start <= 0) {
+        mes_gasto_start += 12
+        ano_gasto -= 1
+      }
+
+      // Only create entries for valid years (2026+)
+      if (ano_gasto < 2026) continue
+
+      // Distribute across 4 weeks in 2 months
+      const mes_1 = mes_gasto_start
+      const mes_2 = mes_gasto_start + 1
+
+      if (mes_1 >= 1 && mes_1 <= 12) {
         cmvEntries.push({
           ano: ano_gasto,
-          mes: mes_gasto + (w > 2 ? 1 : 0), // Weeks 1-2 in first month, 3-4 in second
-          semana: `semana_${w}`,
+          mes: mes_1,
+          semana: 'semana_1',
+          valor: cmv_per_semana,
+          trimestre_origem: `Q${q}-${ano}`,
+        })
+        cmvEntries.push({
+          ano: ano_gasto,
+          mes: mes_1,
+          semana: 'semana_2',
+          valor: cmv_per_semana,
+          trimestre_origem: `Q${q}-${ano}`,
+        })
+      }
+
+      if (mes_2 >= 1 && mes_2 <= 12) {
+        cmvEntries.push({
+          ano: ano_gasto,
+          mes: mes_2,
+          semana: 'semana_3',
+          valor: cmv_per_semana,
+          trimestre_origem: `Q${q}-${ano}`,
+        })
+        cmvEntries.push({
+          ano: ano_gasto,
+          mes: mes_2,
+          semana: 'semana_4',
           valor: cmv_per_semana,
           trimestre_origem: `Q${q}-${ano}`,
         })
