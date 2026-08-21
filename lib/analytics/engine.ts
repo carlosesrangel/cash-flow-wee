@@ -123,7 +123,7 @@ export async function loadTopCustomers(orgId: string, limit: number = 10): Promi
 
   return (data || []).map((row: any) => ({
     rank: row.rank,
-    customerId: row.customer_id,
+    customerId: String(row.customer_id),
     customerName: row.customer_name,
     lifetimeValue: row.lifetime_value || 0,
     orderCount: row.order_count || 0,
@@ -145,7 +145,7 @@ export async function loadCustomerMetrics(orgId: string): Promise<CustomerMetric
     .order('lifetime_value', { ascending: false })
 
   return (data || []).map((row: any) => ({
-    customerId: row.customer_id,
+    customerId: String(row.customer_id),
     customerName: row.customer_name,
     orderCount: row.order_count || 0,
     lifetimeValue: row.lifetime_value || 0,
@@ -170,7 +170,7 @@ export async function loadProductRevenue(orgId: string): Promise<ProductRevenue[
     .order('revenue_total', { ascending: false })
 
   return (data || []).map((row: any) => ({
-    productId: row.produto_id,
+    productId: String(row.produto_id),
     productName: row.descricao_produto,
     realized: row.revenue_realized || 0,
     pending: row.revenue_pending || 0,
