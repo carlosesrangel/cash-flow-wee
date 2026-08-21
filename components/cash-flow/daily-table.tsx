@@ -5,6 +5,7 @@ import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
 import type { CashFlowDay } from '@/lib/cash-flow/aggregate'
 import type { CashFlowEntry } from '@/lib/cash-flow/engine'
+import { Plus, Minus } from 'lucide-react'
 
 export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: CashFlowEntry[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -38,8 +39,11 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                     <button
                       type="button"
                       onClick={() => setExpanded(isExpanded ? null : day.date)}
-                      className="font-medium underline decoration-dotted"
+                      className="flex items-center gap-2 font-medium hover:text-primary transition-colors"
                     >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current">
+                        {isExpanded ? <Minus size={12} /> : <Plus size={12} />}
+                      </span>
                       {formatDateOnlyBR(day.date)}
                     </button>
                   </td>

@@ -202,19 +202,42 @@ export async function loadRevenueVariance(orgId: string, months: number = 12): P
 
 // Sales Summary (KPIs)
 export async function loadSalesSummary(orgId: string): Promise<SalesSummary> {
-  const [monthlyData, topCustomers, monthlyRevenue] = await Promise.all([
-    loadMonthlyRevenue(orgId, 1),
+  const admin = createAdminSupabaseClient()
+
+  // `loadMonthlyRevenue` has no upper date bound, so ordering by month desc
+  // would surface a future-dated invoice (Olist due dates run years ahead
+  // of "today" for installment plans) instead of the actual current
+  // calendar month. Query the exact current month explicitly instead.
+  const now = new Date()
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+
+  const [{ data: currentMonthRows }, topCustomers, last12Months, products] = await Promise.all([
+    admin
+      .from('v_monthly_revenue')
+      .select('revenue_realized, revenue_pending, revenue_total, invoice_count, unique_customers')
+      .eq('org_id', orgId)
+      .eq('month', currentMonthKey)
+      .maybeSingle(),
     loadTopCustomers(orgId, 100),
     loadMonthlyRevenue(orgId, 12),
+    loadProductRevenue(orgId),
   ])
 
-  const currentMonth = monthlyData[0]
-  const currentYear = monthlyRevenue
+  const currentMonth = currentMonthRows
+    ? {
+        realized: (currentMonthRows as any).revenue_realized || 0,
+        invoiceCount: (currentMonthRows as any).invoice_count || 0,
+      }
+    : { realized: 0, invoiceCount: 0 }
+
+  // Total revenue realized to date: only months up to and including the
+  // current one, excluding future-dated (not-yet-due) invoices.
+  const currentYear = last12Months.filter((m) => m.month <= currentMonthKey)
 
   const totalRevenue = currentYear.reduce((sum, m) => sum + m.realized, 0)
-  const monthlyRevenue_ = currentMonth?.realized || 0
-  const invoicesThisMonth = currentMonth?.invoiceCount || 0
-  const productCount = 0 // Will be populated from product revenue
+  const monthlyRevenue_ = currentMonth.realized
+  const invoicesThisMonth = currentMonth.invoiceCount
+  const productCount = products.length
 
   const avgOrderValue = invoicesThisMonth > 0 ? monthlyRevenue_ / invoicesThisMonth : 0
 
