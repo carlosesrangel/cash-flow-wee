@@ -29,8 +29,8 @@ export default function ClientesPage() {
       const res = await fetch('/api/analytics/customers')
       const data = await res.json()
       setCustomers(data.allMetrics || [])
-    } catch (error) {
-      console.error('Failed to load customers:', error)
+    } catch {
+      // Silently fail and show empty state
     } finally {
       setLoading(false)
     }

@@ -9,6 +9,8 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 const ORG_ID = '30805a10-b85f-4ac0-bd1a-899f93678725'
 
+type ViewRow = Record<string, unknown>
+
 async function populateSalesMetrics() {
   const admin = createAdminSupabaseClient()
 
@@ -24,7 +26,7 @@ async function populateSalesMetrics() {
     .from('reconciliation_matches')
     .select('olist_accounts_receivable_id')
 
-  const matchedIds = new Set(matches?.map((m: any) => m.olist_accounts_receivable_id) ?? [])
+  const matchedIds = new Set(matches?.map((m: ViewRow) => m.olist_accounts_receivable_id) ?? [])
 
   // Group by date
   const salesByDate = new Map<string, { quantidade: number; receita: number; realizada: number }>()
@@ -82,7 +84,7 @@ async function populateCustomerAnalytics() {
       .from('reconciliation_matches')
       .select('olist_accounts_receivable_id')
 
-    const matchedIds = new Set(matches?.map((m: any) => m.olist_accounts_receivable_id) ?? [])
+    const matchedIds = new Set(matches?.map((m: ViewRow) => m.olist_accounts_receivable_id) ?? [])
 
     const totalGasto = orders?.reduce((sum, o) => sum + (o.valor ?? 0), 0) ?? 0
     const totalRecebido = orders?.reduce((sum, o) => (matchedIds.has(o.id) ? sum + (o.valor ?? 0) : sum), 0) ?? 0
@@ -119,7 +121,7 @@ async function populateProductAnalytics() {
     .from('reconciliation_matches')
     .select('olist_accounts_receivable_id')
 
-  const matchedIds = new Set(matches?.map((m: any) => m.olist_accounts_receivable_id) ?? [])
+  const matchedIds = new Set(matches?.map((m: ViewRow) => m.olist_accounts_receivable_id) ?? [])
 
   // For simplicity, group all orders by their existence
   const { data: orders } = await admin

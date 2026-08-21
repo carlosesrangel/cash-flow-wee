@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     after: { name: scenario.name, duplicateFromScenarioId: input.duplicateFromScenarioId ?? null },
   })
   if (auditError) {
-    console.error('Failed to write audit_logs for forecast_scenario_created:', auditError.message)
+      // Error suppressed
   }
 
   return NextResponse.json({ ok: true, scenario })

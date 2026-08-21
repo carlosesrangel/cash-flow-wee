@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ months: report })
   } catch (error) {
-    console.error('Error generating forecast report:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Erro ao gerar relatório de forecast' }, { status: 500 })
   }
 }

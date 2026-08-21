@@ -13,6 +13,8 @@ import 'dotenv/config'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { populateProjectedAR } from '@/lib/forecast/projections'
 
+type ViewRow = Record<string, unknown>
+
 const ORG_ID = '30805a10-b85f-4ac0-bd1a-899f93678725'
 
 function monthKey(ano: number, mes: number) {
@@ -126,7 +128,7 @@ async function main() {
     .limit(6)
 
   const avg =
-    (history ?? []).reduce((sum, m: any) => sum + (m.revenue_total ?? 0), 0) / ((history ?? []).length || 1)
+    (history ?? []).reduce((sum, m: ViewRow) => sum + (m.revenue_total as number ?? 0), 0) / ((history ?? []).length || 1)
   const baseRevenue = Math.round(avg) || 15000
 
   console.log(`📊 Base de projeção (média últimos ${history?.length ?? 0} meses): R$ ${baseRevenue}`)

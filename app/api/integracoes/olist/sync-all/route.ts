@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log(`📊 Encontradas ${connections.length} organizações para sincronizar`)
+      // Log suppressed
 
     // 3. Sincronizar cada organização
     const results = {
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     for (const conn of connections) {
       try {
-        console.log(`🔄 Sincronizando org ${conn.org_id}...`)
+      // Log suppressed
 
         // Verificar se há sync em andamento
         const { data: activeSyncs } = await admin
@@ -76,19 +76,19 @@ export async function POST(request: NextRequest) {
           .maybeSingle()
 
         if (activeSyncs) {
-          console.log(`⏳ Sync já em andamento para ${conn.org_id}, pulando`)
+      // Log suppressed
           results.skipped++
           continue
         }
 
         // Executar sync (incremental por padrão para GitHub Action)
         await runOlistSync(conn.org_id, 'incremental')
-        console.log(`✅ Sync concluído para ${conn.org_id}`)
+      // Log suppressed
         results.synced++
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
-        console.error(`❌ Erro ao sincronizar ${conn.org_id}: ${errorMsg}`)
+      // Error suppressed
         results.failed++
         results.errors.push({
           orgId: conn.org_id,
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido'
-    console.error('❌ Erro geral:', errorMsg)
+      // Error suppressed
 
     return NextResponse.json(
       {

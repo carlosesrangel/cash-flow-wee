@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       summary,
     })
   } catch (error) {
-    console.error('Error loading revenue analytics:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to load revenue analytics' }, { status: 500 })
   }
 }

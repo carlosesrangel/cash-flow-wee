@@ -53,7 +53,7 @@ export default function VendasPage() {
         products: products.products,
       })
     } catch (error) {
-      console.error('Failed to load analytics:', error)
+      // Error suppressed
     } finally {
       setLoading(false)
     }

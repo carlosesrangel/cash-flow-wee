@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     after: { percentual: input.percentual },
   })
   if (auditError) {
-    console.error('Failed to write audit_logs for forecast_scenario_multiplier_updated:', auditError.message)
+      // Error suppressed
   }
 
   return NextResponse.json({ ok: true })

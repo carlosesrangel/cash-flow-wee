@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const payments = await loadPlannedPayments(member.orgId)
     return NextResponse.json({ payments })
   } catch (error) {
-    console.error('Error loading planned payments:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to load payments' }, { status: 500 })
   }
 }
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     await savePlannedPayment(member.orgId, body.data.apId, body.data.plannedDate, member.profileId)
     return NextResponse.json({ ok: true })
   } catch (error) {
-    console.error('Error saving planned payment:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to save payment' }, { status: 500 })
   }
 }
@@ -46,7 +46,7 @@ export async function DELETE(req: NextRequest) {
     await deletePlannedPayment(member.orgId, apId)
     return NextResponse.json({ ok: true })
   } catch (error) {
-    console.error('Error deleting planned payment:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to delete payment' }, { status: 500 })
   }
 }

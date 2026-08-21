@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       count: allMetrics.length,
     })
   } catch (error) {
-    console.error('Error loading customer analytics:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to load customer analytics' }, { status: 500 })
   }
 }

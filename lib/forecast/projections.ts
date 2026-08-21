@@ -12,6 +12,8 @@
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
+type ViewRow = Record<string, unknown>
+
 export interface SalesMixEntry {
   modalidade: string
   percentual: number
@@ -109,10 +111,10 @@ export async function loadForecastEntriesForVersion(
     .order('ano, mes')
 
   if (error) throw new Error(`loadForecastEntriesForVersion: ${error.message}`)
-  return (data ?? []).map((row: any) => ({
-    ano: row.ano,
-    mes: row.mes,
-    receita: row.receita,
+  return (data ?? []).map((row: ViewRow) => ({
+    ano: row.ano as number,
+    mes: row.mes as number,
+    receita: row.receita as number,
   }))
 }
 
@@ -129,12 +131,12 @@ export async function loadSalesMixForVersion(
     .eq('version_id', versionId)
 
   if (error) throw new Error(`loadSalesMixForVersion: ${error.message}`)
-  return (data ?? []).map((row: any) => ({
-    modalidade: row.modalidade,
-    percentual: row.percentual,
-    parcelas_media: row.parcelas_media,
-    taxa_cartao: row.taxa_cartao,
-    dias_recebimento: row.dias_recebimento,
+  return (data ?? []).map((row: ViewRow) => ({
+    modalidade: row.modalidade as string,
+    percentual: row.percentual as number,
+    parcelas_media: row.parcelas_media as number,
+    taxa_cartao: row.taxa_cartao as number,
+    dias_recebimento: row.dias_recebimento as number,
   }))
 }
 

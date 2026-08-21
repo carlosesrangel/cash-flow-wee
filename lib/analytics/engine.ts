@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+type ViewRow = Record<string, unknown>
 
 export type DailyRevenuePoint = {
   date: string
@@ -81,11 +82,11 @@ export async function loadRevenueTimeSeries(
     .gte('date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
     .order('date', { ascending: true })
 
-  return (data || []).map((row: any) => ({
-    date: row.date,
-    revenue: row.daily_revenue || 0,
-    transactions: row.daily_transactions || 0,
-    customers: row.daily_customers || 0,
+  return (data || []).map((row: ViewRow) => ({
+    date: row.date as string,
+    revenue: (row.daily_revenue as number) || 0,
+    transactions: (row.daily_transactions as number) || 0,
+    customers: (row.daily_customers as number) || 0,
   }))
 }
 
@@ -100,13 +101,13 @@ export async function loadMonthlyRevenue(orgId: string, months: number = 12): Pr
     .gte('month', new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
     .order('month', { ascending: false })
 
-  return (data || []).map((row: any) => ({
-    month: row.month,
-    realized: row.revenue_realized || 0,
-    pending: row.revenue_pending || 0,
-    total: row.revenue_total || 0,
-    invoiceCount: row.invoice_count || 0,
-    uniqueCustomers: row.unique_customers || 0,
+  return (data || []).map((row: ViewRow) => ({
+    month: row.month as string,
+    realized: (row.revenue_realized as number) || 0,
+    pending: (row.revenue_pending as number) || 0,
+    total: (row.revenue_total as number) || 0,
+    invoiceCount: (row.invoice_count as number) || 0,
+    uniqueCustomers: (row.unique_customers as number) || 0,
   }))
 }
 
@@ -121,14 +122,14 @@ export async function loadTopCustomers(orgId: string, limit: number = 10): Promi
     .lte('rank', limit)
     .order('rank', { ascending: true })
 
-  return (data || []).map((row: any) => ({
-    rank: row.rank,
+  return (data || []).map((row: ViewRow) => ({
+    rank: row.rank as number,
     customerId: String(row.customer_id),
-    customerName: row.customer_name,
-    lifetimeValue: row.lifetime_value || 0,
-    orderCount: row.order_count || 0,
-    avgOrderValue: row.avg_order_value || 0,
-    revenuePercentage: row.revenue_percentage || 0,
+    customerName: row.customer_name as string,
+    lifetimeValue: (row.lifetime_value as number) || 0,
+    orderCount: (row.order_count as number) || 0,
+    avgOrderValue: (row.avg_order_value as number) || 0,
+    revenuePercentage: (row.revenue_percentage as number) || 0,
   }))
 }
 
@@ -144,16 +145,16 @@ export async function loadCustomerMetrics(orgId: string): Promise<CustomerMetric
     .eq('org_id', orgId)
     .order('lifetime_value', { ascending: false })
 
-  return (data || []).map((row: any) => ({
+  return (data || []).map((row: ViewRow) => ({
     customerId: String(row.customer_id),
-    customerName: row.customer_name,
-    orderCount: row.order_count || 0,
-    lifetimeValue: row.lifetime_value || 0,
-    avgOrderValue: row.avg_order_value || 0,
-    lastOrderDate: row.last_order_date,
-    firstOrderDate: row.first_order_date,
-    daysSinceLastOrder: row.days_since_last_order,
-    pendingAmount: row.pending_amount || 0,
+    customerName: row.customer_name as string,
+    orderCount: (row.order_count as number) || 0,
+    lifetimeValue: (row.lifetime_value as number) || 0,
+    avgOrderValue: (row.avg_order_value as number) || 0,
+    lastOrderDate: row.last_order_date as string | null,
+    firstOrderDate: row.first_order_date as string | null,
+    daysSinceLastOrder: row.days_since_last_order as number | null,
+    pendingAmount: (row.pending_amount as number) || 0,
   }))
 }
 
@@ -169,14 +170,14 @@ export async function loadProductRevenue(orgId: string): Promise<ProductRevenue[
     .eq('org_id', orgId)
     .order('revenue_total', { ascending: false })
 
-  return (data || []).map((row: any) => ({
+  return (data || []).map((row: ViewRow) => ({
     productId: String(row.produto_id),
-    productName: row.descricao_produto,
-    realized: row.revenue_realized || 0,
-    pending: row.revenue_pending || 0,
-    total: row.revenue_total || 0,
-    invoiceCount: row.invoice_count || 0,
-    uniqueCustomers: row.unique_customers || 0,
+    productName: row.descricao_produto as string,
+    realized: (row.revenue_realized as number) || 0,
+    pending: (row.revenue_pending as number) || 0,
+    total: (row.revenue_total as number) || 0,
+    invoiceCount: (row.invoice_count as number) || 0,
+    uniqueCustomers: (row.unique_customers as number) || 0,
   }))
 }
 
@@ -191,12 +192,12 @@ export async function loadRevenueVariance(orgId: string, months: number = 12): P
     .gte('month', new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
     .order('month', { ascending: false })
 
-  return (data || []).map((row: any) => ({
-    month: row.month,
-    forecastTotal: row.forecast_total || 0,
-    realizedTotal: row.realized_total || 0,
-    varianceAbsolute: row.variance_absolute || 0,
-    variancePercentage: row.variance_percentage || 0,
+  return (data || []).map((row: ViewRow) => ({
+    month: row.month as string,
+    forecastTotal: (row.forecast_total as number) || 0,
+    realizedTotal: (row.realized_total as number) || 0,
+    varianceAbsolute: (row.variance_absolute as number) || 0,
+    variancePercentage: (row.variance_percentage as number) || 0,
   }))
 }
 
@@ -225,8 +226,8 @@ export async function loadSalesSummary(orgId: string): Promise<SalesSummary> {
 
   const currentMonth = currentMonthRows
     ? {
-        realized: (currentMonthRows as any).revenue_realized || 0,
-        invoiceCount: (currentMonthRows as any).invoice_count || 0,
+        realized: ((currentMonthRows as ViewRow).revenue_realized as number) || 0,
+        invoiceCount: ((currentMonthRows as ViewRow).invoice_count as number) || 0,
       }
     : { realized: 0, invoiceCount: 0 }
 

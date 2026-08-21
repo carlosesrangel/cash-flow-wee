@@ -44,7 +44,7 @@ export default function PlanejarpagamentosPage() {
       setPayments(paymentsData)
       setScenarios(scenariosData)
     } catch (error) {
-      console.error('Failed to load data:', error)
+      // Error suppressed
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,7 @@ export default function PlanejarpagamentosPage() {
         setImpact(data.impact)
       }
     } catch (error) {
-      console.error('Failed to load scenario impact:', error)
+      // Error suppressed
     } finally {
       setLoadingImpact(false)
     }

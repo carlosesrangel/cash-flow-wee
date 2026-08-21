@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     after: { receita: input.receita, cenario: input.cenario ?? null, comentario: input.comentario ?? null },
   })
   if (auditError) {
-    console.error('Failed to write audit_logs for forecast_entry_updated:', auditError.message)
+      // Error suppressed
   }
 
   return NextResponse.json({ ok: true })

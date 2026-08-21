@@ -18,7 +18,7 @@ export default function ProdutosAnalyticsPage() {
       const data = await res.json()
       setProducts(data.products || [])
     } catch (error) {
-      console.error('Failed to load products:', error)
+      // Error suppressed
     } finally {
       setLoading(false)
     }

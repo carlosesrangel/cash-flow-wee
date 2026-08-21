@@ -94,7 +94,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error calculating scenario impact:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to calculate impact' }, { status: 500 })
   }
 }

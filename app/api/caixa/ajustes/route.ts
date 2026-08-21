@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     after: input,
   })
   if (auditError) {
-    console.error('Failed to write audit_logs for manual_cash_entry_created:', auditError.message)
+      // Error suppressed
   }
 
   return NextResponse.json({ ok: true })

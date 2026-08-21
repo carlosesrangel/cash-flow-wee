@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
     if (error) throw error
   } catch (err) {
-    console.error('Olist OAuth callback failed:', err)
+      // Error suppressed
     return NextResponse.redirect(`${origin}/integracoes?olist_erro=falha_conexao`)
   }
 

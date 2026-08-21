@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       count: products.length,
     })
   } catch (error) {
-    console.error('Error loading product analytics:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to load product analytics' }, { status: 500 })
   }
 }

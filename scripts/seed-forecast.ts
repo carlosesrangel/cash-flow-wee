@@ -9,6 +9,8 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 const ORG_ID = '30805a10-b85f-4ac0-bd1a-899f93678725'
 
+type ViewRow = Record<string, unknown>
+
 function monthKey(ano: number, mes: number) {
   return `${ano}-${String(mes).padStart(2, '0')}-01`
 }
@@ -34,7 +36,7 @@ async function main() {
     .limit(6)
 
   const avg =
-    (history ?? []).reduce((sum, m: any) => sum + (m.revenue_total ?? 0), 0) / ((history ?? []).length || 1)
+    (history ?? []).reduce((sum, m: ViewRow) => sum + (m.revenue_total as number ?? 0), 0) / ((history ?? []).length || 1)
   const base = Math.round(avg) || 15000
 
   console.log(`📊 Base de projeção (média últimos ${history?.length ?? 0} meses reais): R$ ${base}`)

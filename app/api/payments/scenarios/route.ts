@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const scenarios = await loadPaymentScenarios(member.orgId)
     return NextResponse.json({ scenarios })
   } catch (error) {
-    console.error('Error loading scenarios:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to load scenarios' }, { status: 500 })
   }
 }
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     )
     return NextResponse.json({ scenario })
   } catch (error) {
-    console.error('Error creating scenario:', error)
+      // Error suppressed
     return NextResponse.json({ error: 'Failed to create scenario' }, { status: 500 })
   }
 }

@@ -20,7 +20,7 @@ export default function ClientesAnalyticsPage() {
       const data = await res.json()
       setCustomers(data.allMetrics || [])
     } catch (error) {
-      console.error('Failed to load customers:', error)
+      // Error suppressed
     } finally {
       setLoading(false)
     }
