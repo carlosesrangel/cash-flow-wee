@@ -16,7 +16,8 @@
     "sync:sumup": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/run-sumup-sync.ts",
     "load:initial": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/run-initial-load.ts",
     "populate:analytics": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/populate-analytics.ts",
-    "seed:forecast": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast.ts"
+    "seed:forecast": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast.ts",
+    "seed:forecast:60months": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast-60months.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

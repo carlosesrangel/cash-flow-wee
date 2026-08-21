@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { getCurrentMember } from '@/lib/auth/session'
 import { canEditForecast } from '@/lib/auth/rbac'
-import { loadAllVersions, loadVersionEntries } from '@/lib/forecast/engine'
-import { PlanningGrid } from '@/components/forecast/planning-grid'
+import { loadAllVersions, loadVersionEntries, loadSalesMixForVersion, loadCMVProjectionsForVersion, loadProjectedARForVersion } from '@/lib/forecast/engine'
+import { PlanningTabbedGrid } from '@/components/forecast/planning-tabbed-grid'
 import { NewVersionForm } from '@/components/forecast/new-version-form'
 
 export default async function PlanejamentoPage({
@@ -24,6 +24,9 @@ export default async function PlanejamentoPage({
   const selected = versions.find((v) => v.id === versao) ?? versions[0]
   const isCurrent = selected.id === versions[0].id
   const entries = await loadVersionEntries(member.orgId, selected.id)
+  const salesMix = await loadSalesMixForVersion(selected.id)
+  const cmvProjections = await loadCMVProjectionsForVersion(selected.id)
+  const projectedAR = await loadProjectedARForVersion(selected.id)
   const canEdit = canEditForecast(member.role)
 
   return (
@@ -51,7 +54,14 @@ export default async function PlanejamentoPage({
         </button>
       </form>
       {canEdit && <NewVersionForm />}
-      <PlanningGrid versionId={selected.id} entries={entries} canEdit={canEdit && isCurrent} />
+      <PlanningTabbedGrid
+        versionId={selected.id}
+        entries={entries}
+        canEdit={canEdit && isCurrent}
+        salesMix={salesMix}
+        cmvProjections={cmvProjections}
+        projectedAR={projectedAR}
+      />
     </div>
   )
 }

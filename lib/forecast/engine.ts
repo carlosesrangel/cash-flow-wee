@@ -247,3 +247,40 @@ export async function updateScenarioMultiplier(
     .upsert({ scenario_id: scenarioId, ano, mes, percentual }, { onConflict: 'scenario_id,ano,mes' })
   if (error) throw new Error(`Failed to upsert forecast_scenario_multipliers: ${error.message}`)
 }
+
+// Extended Planning Data Loaders (for 60-month planning)
+
+export async function loadSalesMixForVersion(versionId: string) {
+  const admin = createAdminSupabaseClient()
+  const { data, error } = await admin
+    .from('sales_mix')
+    .select('modalidade, percentual, parcelas_media, taxa_cartao, dias_recebimento')
+    .eq('version_id', versionId)
+    .order('percentual', { ascending: false })
+
+  if (error) throw new Error(`Failed to load sales_mix: ${error.message}`)
+  return data ?? []
+}
+
+export async function loadCMVProjectionsForVersion(versionId: string) {
+  const admin = createAdminSupabaseClient()
+  const { data, error } = await admin
+    .from('cmv_projections')
+    .select('ano_gasto, mes_gasto, semana, valor_cmv, trimestre_origem')
+    .eq('version_id', versionId)
+    .order('ano_gasto')
+    .order('mes_gasto')
+    .order('semana')
+
+  if (error) throw new Error(`Failed to load cmv_projections: ${error.message}`)
+  return data ?? []
+}
+
+export async function loadProjectedARForVersion(versionId: string) {
+  const admin = createAdminSupabaseClient()
+  const { data, error } = await admin
+    .rpc('get_projected_ar_summary', { p_version_id: versionId })
+
+  if (error) throw new Error(`Failed to load projected AR summary: ${error.message}`)
+  return data ?? []
+}
