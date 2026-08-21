@@ -1,7 +1,7 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { canManageCashBalance } from '@/lib/auth/rbac'
-import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
-import { aggregateByDay, getMinimumProjectedBalance } from '@/lib/cash-flow/aggregate'
+import { loadCashFlowEntries, resolveOpeningBalance, buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { getMinimumProjectedBalance } from '@/lib/cash-flow/aggregate'
 import { diffDaysFromToday, shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { formatBRL } from '@/lib/format/currency'
@@ -59,8 +59,7 @@ export default async function VisaoGeralPage() {
   const to = shiftDateString(today, 90)
 
   const entries = await loadCashFlowEntries(member.orgId)
-  const opening = await resolveOpeningBalance(member.orgId, from, entries)
-  const days = aggregateByDay(entries, { from, to }, opening)
+  const days = await buildCashFlowDays(member.orgId, from, to, entries)
 
   // Independently anchored at "today" (not `from`, which is 90 days in the
   // past) so a snapshot recorded today is picked up immediately, and built

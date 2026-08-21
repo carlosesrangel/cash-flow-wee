@@ -1,6 +1,5 @@
 import { getCurrentMember } from '@/lib/auth/session'
-import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
-import { aggregateByDay } from '@/lib/cash-flow/aggregate'
+import { loadCashFlowEntries, buildCashFlowDays } from '@/lib/cash-flow/engine'
 import { shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { PageHeader } from '@/components/ui/page-header'
@@ -17,8 +16,7 @@ export default async function FluxoDeCaixaDiarioPage() {
   const to = shiftDateString(today, 90)
 
   const entries = await loadCashFlowEntries(member.orgId)
-  const opening = await resolveOpeningBalance(member.orgId, from, entries)
-  const days = aggregateByDay(entries, { from, to }, opening)
+  const days = await buildCashFlowDays(member.orgId, from, to, entries)
 
   return (
     <div className="space-y-6">

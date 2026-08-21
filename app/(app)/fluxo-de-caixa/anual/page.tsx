@@ -1,8 +1,8 @@
 import { getCurrentMember } from '@/lib/auth/session'
-import { loadCashFlowEntries, resolveOpeningBalance } from '@/lib/cash-flow/engine'
+import { loadCashFlowEntries, buildCashFlowDays } from '@/lib/cash-flow/engine'
 import { loadForecastedCashFlowEntries, mergeCashFlowWithForecast } from '@/lib/forecast/projection'
 import { loadCashFlowWithPlannedPayments } from '@/lib/cash-flow/with-payments'
-import { aggregateByDay, aggregateByMonth } from '@/lib/cash-flow/aggregate'
+import { aggregateByMonth } from '@/lib/cash-flow/aggregate'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { PageHeader } from '@/components/ui/page-header'
 import { AnnualTable } from '@/components/cash-flow/annual-table'
@@ -49,8 +49,7 @@ export default async function FluxoDeCaixaAnualPage({
     }
   }
 
-  const opening = await resolveOpeningBalance(member.orgId, from, entries)
-  const days = aggregateByDay(entries, { from, to }, opening)
+  const days = await buildCashFlowDays(member.orgId, from, to, entries)
   const months = aggregateByMonth(days)
 
   return (

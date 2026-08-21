@@ -45,12 +45,18 @@ function mockAdmin(options: {
   linkedRows?: Row[]
   snapshot?: Row | null
   adjustmentRows?: Row[]
+  contactRows?: Row[]
+  orderRows?: Row[]
+  orderItemRows?: Row[]
 }) {
   const arRows = options.arRows ?? []
   const apRows = options.apRows ?? []
   const manualRows = options.manualRows ?? []
   const linkedRows = options.linkedRows ?? []
   const adjustmentRows = options.adjustmentRows ?? []
+  const contactRows = options.contactRows ?? []
+  const orderRows = options.orderRows ?? []
+  const orderItemRows = options.orderItemRows ?? []
 
   const snapshotChain: Record<string, unknown> = {}
   snapshotChain.eq = vi.fn(() => snapshotChain)
@@ -83,6 +89,9 @@ function mockAdmin(options: {
     }
     if (table === 'reconciliation_matches') return { select: vi.fn(() => makePageableChain(linkedRows)) }
     if (table === 'cash_balance_snapshots') return { select: vi.fn(() => snapshotChain) }
+    if (table === 'olist_contacts') return { select: vi.fn(() => makePageableChain(contactRows)) }
+    if (table === 'olist_orders') return { select: vi.fn(() => makePageableChain(orderRows)) }
+    if (table === 'olist_order_items') return { select: vi.fn(() => makePageableChain(orderItemRows)) }
     throw new Error(`unexpected table ${table}`)
   })
 
