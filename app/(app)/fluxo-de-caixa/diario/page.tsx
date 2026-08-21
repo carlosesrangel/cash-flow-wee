@@ -3,7 +3,7 @@ import { loadCashFlowEntries, buildCashFlowDays } from '@/lib/cash-flow/engine'
 import { shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { PageHeader } from '@/components/ui/page-header'
-import { DailyTable } from '@/components/cash-flow/daily-table'
+import { DailyCashFlowClient } from '@/components/cash-flow/daily-cash-flow-client'
 
 export default async function FluxoDeCaixaDiarioPage() {
   const member = await getCurrentMember()
@@ -22,9 +22,9 @@ export default async function FluxoDeCaixaDiarioPage() {
     <div className="space-y-6">
       <PageHeader
         title="Fluxo de Caixa — Diário"
-        description={`Período: ${from} a ${to}. Clique em um dia para ver os lançamentos que o compõem.`}
+        description="Visualize o fluxo de caixa diário com filtros de realizado, contratado e projetado."
       />
-      <DailyTable days={days} entries={entries} />
+      <DailyCashFlowClient days={days} entries={entries} />
     </div>
   )
 }

@@ -4,6 +4,8 @@ import { classifyAccountsReceivable, classifyAccountsPayable, type CashBucket } 
 import { aggregateByDay, type CashFlowDay } from '@/lib/cash-flow/aggregate'
 import { shiftDateString } from '@/lib/cash-flow/dates'
 
+export type { CashBucket } from '@/lib/cash-flow/classify'
+
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
 export type CashFlowEntry = {
