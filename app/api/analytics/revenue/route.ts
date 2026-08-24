@@ -12,11 +12,27 @@ export async function GET(req: NextRequest) {
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
+    const searchParams = req.nextUrl.searchParams
+    const startDateStr = searchParams.get('startDate')
+    const endDateStr = searchParams.get('endDate')
+
+    let startDate: Date | undefined
+    let endDate: Date | undefined
+    let daysRange = 90
+
+    if (startDateStr && endDateStr) {
+      startDate = new Date(startDateStr)
+      endDate = new Date(endDateStr)
+      daysRange = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    } else {
+      daysRange = 90
+    }
+
     const [timeSeries, monthly, variance, summary] = await Promise.all([
-      loadRevenueTimeSeries(member.orgId, 90),
-      loadMonthlyRevenue(member.orgId, 12),
-      loadRevenueVariance(member.orgId, 12),
-      loadSalesSummary(member.orgId),
+      loadRevenueTimeSeries(member.orgId, daysRange, startDate, endDate),
+      loadMonthlyRevenue(member.orgId, 12, startDate, endDate),
+      loadRevenueVariance(member.orgId, 12, startDate, endDate),
+      loadSalesSummary(member.orgId, startDate, endDate),
     ])
 
     return NextResponse.json({

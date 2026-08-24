@@ -10,6 +10,7 @@ import { TopCustomersCard } from '@/components/analytics/top-customers-card'
 import { MonthlyRevenueCard } from '@/components/analytics/monthly-revenue-card'
 import { ProductsRevenueCard } from '@/components/analytics/products-revenue-card'
 import { VarianceCard } from '@/components/analytics/variance-card'
+import { DateRangeFilter, type DateRange } from '@/components/analytics/date-range-filter'
 import type {
   DailyRevenuePoint,
   MonthlyRevenue,
@@ -30,17 +31,29 @@ type AnalyticsData = {
 export default function VendasPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(start.getDate() - 90)
+    return { startDate: start, endDate: end, days: 90 }
+  })
 
   useEffect(() => {
     loadAnalytics()
-  }, [])
+  }, [dateRange])
 
   async function loadAnalytics() {
+    setLoading(true)
     try {
+      const params = new URLSearchParams({
+        startDate: dateRange.startDate.toISOString(),
+        endDate: dateRange.endDate.toISOString(),
+      })
+
       const [revenueRes, customersRes, productsRes] = await Promise.all([
-        fetch('/api/analytics/revenue'),
-        fetch('/api/analytics/customers'),
-        fetch('/api/analytics/products'),
+        fetch(`/api/analytics/revenue?${params}`),
+        fetch(`/api/analytics/customers?${params}`),
+        fetch(`/api/analytics/products?${params}`),
       ])
 
       const revenue = await revenueRes.json()
@@ -57,6 +70,10 @@ export default function VendasPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleDateRangeChange(newRange: DateRange) {
+    setDateRange(newRange)
   }
 
   if (loading) {
@@ -84,10 +101,20 @@ export default function VendasPage() {
     <div className="space-y-6">
       <PageHeader
         title="Vendas"
-        description="Últimos 90 dias: receita, clientes e produtos"
+        description={`${dateRange.startDate.toLocaleDateString('pt-BR')} até ${dateRange.endDate.toLocaleDateString('pt-BR')}`}
       />
 
-      <SalesSummaryCard summary={data.summary} />
+      <DateRangeFilter onRangeChange={handleDateRangeChange} loading={loading} />
+
+      {loading ? (
+        <Card>
+          <CardContent className="pt-6">
+            <Skeleton className="h-24" />
+          </CardContent>
+        </Card>
+      ) : (
+        <SalesSummaryCard summary={data?.summary || { totalRevenue: 0, totalOrders: 0 }} />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

@@ -7,7 +7,19 @@ export async function GET(req: NextRequest) {
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const products = await loadProductRevenue(member.orgId)
+    const searchParams = req.nextUrl.searchParams
+    const startDateStr = searchParams.get('startDate')
+    const endDateStr = searchParams.get('endDate')
+
+    let startDate: Date | undefined
+    let endDate: Date | undefined
+
+    if (startDateStr && endDateStr) {
+      startDate = new Date(startDateStr)
+      endDate = new Date(endDateStr)
+    }
+
+    const products = await loadProductRevenue(member.orgId, startDate, endDate)
 
     return NextResponse.json({
       products,
