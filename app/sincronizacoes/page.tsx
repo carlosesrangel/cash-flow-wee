@@ -1,6 +1,4 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import Link from 'next/link'
 
 interface SyncRun {
@@ -175,7 +173,14 @@ export default async function SyncDashboard() {
                           Org: <code className="bg-slate-100 px-2 py-1 rounded text-xs">{sync.org_id.substring(0, 8)}...</code>
                         </p>
                         <p className="text-xs text-slate-500 mt-2">
-                          {format(started, "d 'de' MMMM 'às' HH:mm:ss", { locale: ptBR })}
+                          {started.toLocaleString('pt-BR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
                           {duration && ` • ${duration}s`}
                         </p>
                       </div>
