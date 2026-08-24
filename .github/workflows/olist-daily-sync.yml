@@ -127,6 +127,39 @@ jobs:
               ]
             }'
 
+      - name: Coletar detalhes de erro
+        if: failure()
+        id: error-details
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          (async () => {
+            const { data: failures } = await supabase
+              .from('sync_runs')
+              .select('org_id, error_message, started_at')
+              .eq('integration', 'olist')
+              .eq('status', 'failed')
+              .gte('started_at', new Date(Date.now() - 60*60*1000).toISOString())
+              .order('started_at', { ascending: false });
+
+            const summary = failures && failures.length > 0
+              ? failures.map(f => \`• \${f.org_id.substring(0,8)}...: \${f.error_message || 'Erro desconhecido'}\`).join('\\n')
+              : 'Sem detalhes de erro registrados';
+
+            console.log('ERROR_DETAILS<<EOF');
+            console.log(summary);
+            console.log('EOF');
+          })();
+          " >> $GITHUB_OUTPUT
+
       - name: Notificar falha (Slack - opcional)
         if: failure()
         env:
@@ -137,6 +170,8 @@ jobs:
             exit 0
           fi
 
+          ERROR_DETAILS="${{ steps.error-details.outputs.ERROR_DETAILS }}"
+
           curl -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
             -d '{
@@ -146,7 +181,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*❌ Sincronização Olist Diária Falhou*\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos>"
+                    "text": "*❌ Sincronização Olist Diária Falhou*\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)\n*Detalhes:*\n'"$ERROR_DETAILS"'\n\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos> | <https://cash-flow-wee.vercel.app/sincronizacoes|Dashboard>"
                   }
                 }
               ]
