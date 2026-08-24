@@ -45,25 +45,25 @@ export default async function SyncDashboard() {
     )
   }
 
-  // Agrupar por data
-  const groupedBySyncType = (syncs || []).reduce((acc, sync) => {
+  // Agrupar por tipo
+  const groupedBySyncType = (syncs || []).reduce((acc: Record<string, SyncRun[]>, sync: SyncRun) => {
     const key = sync.integration
     if (!acc[key]) acc[key] = []
-    acc[key].push(sync as SyncRun)
+    acc[key].push(sync)
     return acc
-  }, {} as Record<string, SyncRun[]>)
+  }, {})
 
   // Calcular estatísticas
   const stats = {
     olist: {
       total: groupedBySyncType['olist']?.length || 0,
-      success: groupedBySyncType['olist']?.filter(s => s.status === 'success').length || 0,
-      failed: groupedBySyncType['olist']?.filter(s => s.status === 'failed').length || 0,
+      success: groupedBySyncType['olist']?.filter((s: SyncRun) => s.status === 'success').length || 0,
+      failed: groupedBySyncType['olist']?.filter((s: SyncRun) => s.status === 'failed').length || 0,
     },
     sumup: {
       total: groupedBySyncType['sumup']?.length || 0,
-      success: groupedBySyncType['sumup']?.filter(s => s.status === 'success').length || 0,
-      failed: groupedBySyncType['sumup']?.filter(s => s.status === 'failed').length || 0,
+      success: groupedBySyncType['sumup']?.filter((s: SyncRun) => s.status === 'success').length || 0,
+      failed: groupedBySyncType['sumup']?.filter((s: SyncRun) => s.status === 'failed').length || 0,
     },
   }
 
