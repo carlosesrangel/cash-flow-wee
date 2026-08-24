@@ -35,10 +35,10 @@ export const metadata: Metadata = {
   description: "Plataforma de gestão de fluxo de caixa, tesouraria e inteligência financeira para pequenas empresas.",
   icons: {
     icon: [
-      { url: '/logo2.jpg', type: 'image/jpeg' },
+      { url: '/favicon.png', type: 'image/png' },
     ],
-    shortcut: '/logo2.jpg',
-    apple: '/logo2.jpg',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
   },
 };
 
