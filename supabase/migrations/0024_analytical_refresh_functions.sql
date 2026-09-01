@@ -50,14 +50,14 @@ begin
     sum(amount) as valor_bruto_12m,
     count(distinct case when fee_amount > 0 then id end) as qtd_com_fee,
     sum(case when fee_amount > 0 then amount else 0 end) as valor_base_taxa_12m,
-    sum(fee_amount) as fee_total_12m,
+    coalesce(sum(fee_amount), 0) as fee_total_12m,
     case when sum(case when fee_amount > 0 then amount else 0 end) > 0
-      then sum(fee_amount) / sum(case when fee_amount > 0 then amount else 0 end)
-      else null
+      then coalesce(sum(fee_amount), 0) / sum(case when fee_amount > 0 then amount else 0 end)
+      else 0
     end as taxa_media_simples,
     case when sum(amount) > 0
-      then sum(fee_amount) / sum(amount)
-      else null
+      then coalesce(sum(fee_amount), 0) / sum(amount)
+      else 0
     end as taxa_media_ponderada,
     null::numeric as pct_valor_12m,  -- Will be updated in second pass
     null::numeric as pct_transacoes_12m,  -- Will be updated in second pass
@@ -251,7 +251,7 @@ begin
   )
   select
     target_org_id,
-    ed.payment_type, coalesce(ed.card_type, 'UNKNOWN') as card_type, ed.installments_count, coalesce(ed.entry_mode, 'UNKNOWN') as entry_mode, coalesce(ed.payout_plan, 'UNKNOWN') as payout_plan,
+    ed.payment_type, coalesce(ed.card_type, 'UNKNOWN') as card_type, ed.installments_count as nro_parcelas_modelo, coalesce(ed.entry_mode, 'UNKNOWN') as entry_mode, coalesce(ed.payout_plan, 'UNKNOWN') as payout_plan,
     coalesce(ed.months_to_receipt, 0),  -- NULL months = same month (0)
     sum(ed.payout_amount),
     count(distinct ed.txn_id),
@@ -265,16 +265,16 @@ begin
     'FINANCIAL_MODEL_V2_EXCEL_PARITY'
   from event_data ed
   join modality_totals mt on
-    ed.payment_type = mt.payment_type
-    and ed.card_type = mt.card_type
-    and ed.installments_count = mt.installments_count
-    and ed.entry_mode = mt.entry_mode
-    and ed.payout_plan = mt.payout_plan
+    (ed.payment_type is not distinct from mt.payment_type)
+    and (ed.card_type is not distinct from mt.card_type)
+    and (ed.installments_count is not distinct from mt.installments_count)
+    and (ed.entry_mode is not distinct from mt.entry_mode)
+    and (ed.payout_plan is not distinct from mt.payout_plan)
   group by
     ed.payment_type, ed.card_type, ed.installments_count, ed.entry_mode, ed.payout_plan,
     coalesce(ed.months_to_receipt, 0),
     mt.total_payout
-  on conflict (org_id, payment_type, card_type, installments_count, entry_mode, payout_plan, meses_ate_receber)
+  on conflict (org_id, payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan, meses_ate_receber)
   do update set
     valor_recebido_historico = excluded.valor_recebido_historico,
     pct_recebimento_modalidade = excluded.pct_recebimento_modalidade,
