@@ -8,6 +8,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { fetchAllPages } from '@/lib/reconciliation/run'
 
 export interface LedgerEntry {
   org_id: string
@@ -28,34 +29,44 @@ export interface LedgerEntry {
  * Populate ledger from SumUp successful payouts (actual cash in)
  */
 export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgId: string) {
-  // Load SumUp transaction events that represent payouts
-  const { data: payouts, error } = await admin
-    .from('sumup_transaction_events')
-    .select(`
-      id,
-      transaction_id,
-      transaction:sumup_transactions(
-        id,
-        timestamp_utc,
-        amount
-      ),
-      event_type,
-      status,
-      event_date,
-      due_date,
-      amount
-    `)
-    .eq('org_id', orgId)
-    .in('status', ['RECONCILED', 'SETTLED', 'SCHEDULED', 'PENDING'])
-
-  if (error) {
-    throw error
-  }
+  const payouts = await fetchAllPages<{
+    id: string
+    transaction_id: string
+    transaction: { id: string; timestamp_utc: string | null; amount: number | null }[] | { id: string; timestamp_utc: string | null; amount: number | null } | null
+    event_type: string
+    status: string
+    event_date: string | null
+    due_date: string | null
+    amount: number | null
+  }>(
+    (from, to) =>
+      admin
+        .from('sumup_transaction_events')
+        .select(`
+          id,
+          transaction_id,
+          transaction:sumup_transactions(
+            id,
+            timestamp_utc,
+            amount
+          ),
+          event_type,
+          status,
+          event_date,
+          due_date,
+          amount
+        `)
+        .eq('org_id', orgId)
+        .in('status', ['RECONCILED', 'SETTLED', 'PAID_OUT', 'SCHEDULED', 'PENDING'])
+        .range(from, to),
+    'Failed to load sumup_transaction_events for ledger'
+  )
 
   const entries: LedgerEntry[] = []
   for (const payout of payouts || []) {
-    const transaction = payout.transaction as any
+    const transaction = Array.isArray(payout.transaction) ? payout.transaction[0] : payout.transaction
     if (!transaction) continue
+    const isActual = ['RECONCILED', 'SETTLED', 'PAID_OUT'].includes(payout.status)
 
     // Actual payout (entrada)
     entries.push({
@@ -64,11 +75,11 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
       competence_date: transaction.timestamp_utc?.split('T')[0],
       amount: payout.amount || 0,
       direction: 'entrada',
-      nature: 'SUMUP_PAYOUT_ACTUAL',
+      nature: isActual ? 'SUMUP_PAYOUT_ACTUAL' : 'SUMUP_PAYOUT_SCHEDULED',
       source: 'sumup',
       source_id: transaction.id,
       source_event_id: payout.id,
-      status: payout.status === 'RECONCILED' || payout.status === 'SETTLED' ? 'actual' : 'scheduled',
+      status: isActual ? 'actual' : 'scheduled',
       description: `SumUp payout: ${payout.event_type}`,
       metadata: {
         transaction_id: payout.transaction_id,
@@ -129,14 +140,26 @@ export async function populateLedgerFromSumUpFees(admin: SupabaseClient, orgId: 
  * remainder stays scheduled. Cancelled obligations do not create cash events.
  */
 export async function populateLedgerFromOlistPayables(admin: SupabaseClient, orgId: string) {
-  const { data: payables, error } = await admin
-    .from('olist_accounts_payable')
-    .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico')
-    .eq('org_id', orgId)
-
-  if (error) {
-    throw error
-  }
+  const payables = await fetchAllPages<{
+    id: string
+    olist_id: number
+    situacao: string | null
+    valor: number | null
+    saldo: number | null
+    valor_pago: number | null
+    data_emissao: string | null
+    data_vencimento: string | null
+    data_liquidacao: string | null
+    historico: string | null
+  }>(
+    (from, to) =>
+      admin
+        .from('olist_accounts_payable')
+        .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico')
+        .eq('org_id', orgId)
+        .range(from, to),
+    'Failed to load olist_accounts_payable for ledger'
+  )
 
   const entries: LedgerEntry[] = []
   for (const payable of payables || []) {
@@ -149,7 +172,7 @@ export async function populateLedgerFromOlistPayables(admin: SupabaseClient, org
     const hasKnownValue = Number.isFinite(value) && value > 0
     const hasKnownBalance = Number.isFinite(balance) && balance >= 0
     const derivedPaid = hasKnownValue && hasKnownBalance ? Math.max(value - balance, 0) : null
-    const factualPaid = Number.isFinite(paidValue) && paidValue >= 0 ? paidValue : derivedPaid
+    const factualPaid = paidValue > 0 ? paidValue : derivedPaid
     const dueDate = payable.data_vencimento || payable.data_emissao || new Date().toISOString().split('T')[0]
     const metadata = {
       payable_id: payable.id,
@@ -167,7 +190,7 @@ export async function populateLedgerFromOlistPayables(admin: SupabaseClient, org
         competence_date: payable.data_emissao || dueDate,
         amount: factualPaid,
         direction: 'saida',
-        nature: 'OLIST_PAYABLE_ACTUAL',
+        nature: 'OLIST_AP_ACTUAL',
         source: 'olist',
         source_id: payable.id,
         status: 'actual',
@@ -184,7 +207,7 @@ export async function populateLedgerFromOlistPayables(admin: SupabaseClient, org
         competence_date: payable.data_emissao || dueDate,
         amount: remaining,
         direction: 'saida',
-        nature: 'OLIST_PAYABLE_SCHEDULED',
+        nature: 'OLIST_AP_SCHEDULED',
         source: 'olist',
         source_id: payable.id,
         status: 'scheduled',
@@ -195,6 +218,160 @@ export async function populateLedgerFromOlistPayables(admin: SupabaseClient, org
   }
 
   return entries
+}
+
+/** Populate the ledger from Olist receivables and reconciliation results. */
+export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, orgId: string) {
+  const [receivables, matches] = await Promise.all([
+    fetchAllPages<{
+      id: string
+      olist_id: number
+      situacao: string | null
+      valor: number | null
+      saldo: number | null
+      valor_pago: number | null
+      data_emissao: string | null
+      data_vencimento: string | null
+      data_liquidacao: string | null
+      historico: string | null
+      numero_documento: string | null
+    }>(
+      (from, to) =>
+        admin
+          .from('olist_accounts_receivable')
+          .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico, numero_documento')
+          .eq('org_id', orgId)
+          .range(from, to),
+      'Failed to load olist_accounts_receivable for ledger'
+    ),
+    fetchAllPages<{
+      olist_accounts_receivable_id: string
+      status: string
+      sumup_transaction_event_id: string | null
+    }>(
+      (from, to) =>
+        admin
+          .from('reconciliation_matches')
+          .select('olist_accounts_receivable_id, status, sumup_transaction_event_id')
+          .eq('org_id', orgId)
+          .range(from, to),
+      'Failed to load reconciliation_matches for ledger'
+    ),
+  ])
+
+  const eventIds = matches.map((match) => match.sumup_transaction_event_id).filter((id): id is string => Boolean(id))
+  const events = eventIds.length === 0
+    ? []
+    : await fetchAllPages<{ id: string; due_date: string | null; event_date: string | null }>(
+        (from, to) => admin.from('sumup_transaction_events').select('id, due_date, event_date').in('id', eventIds).range(from, to),
+        'Failed to load reconciled SumUp events for ledger'
+      )
+  const eventById = new Map(events.map((event) => [event.id, event]))
+  const matchByReceivableId = new Map(matches.map((match) => [match.olist_accounts_receivable_id, match]))
+  const entries: LedgerEntry[] = []
+
+  for (const receivable of receivables) {
+    const situation = String(receivable.situacao || '').trim().toLowerCase()
+    if (situation === 'cancelada' || situation === 'cancelado') continue
+
+    const value = Number(receivable.valor)
+    const balance = Number(receivable.saldo)
+    const paidValue = Number(receivable.valor_pago)
+    const hasKnownValue = Number.isFinite(value) && value > 0
+    const hasKnownBalance = Number.isFinite(balance) && balance >= 0
+    const derivedPaid = hasKnownValue && hasKnownBalance ? Math.max(value - balance, 0) : null
+    const match = matchByReceivableId.get(receivable.id)
+    const resolved = match?.status === 'reconciliado_automaticamente' || match?.status === 'reconciliado_manualmente'
+    // In this integration, a resolved reconciliation is the authoritative
+    // settlement signal. The Olist detail field can remain `0`/the original
+    // balance because the payment is confirmed by SumUp, so a zero-valued
+    // `valor_pago` must not erase the resolved cash movement.
+    const factualPaid = resolved
+      ? (Number.isFinite(paidValue) && paidValue > 0 ? paidValue : (derivedPaid !== null && derivedPaid > 0 ? derivedPaid : value))
+      : (Number.isFinite(paidValue) && paidValue > 0 ? paidValue : derivedPaid)
+    const dueDate = receivable.data_vencimento || receivable.data_emissao || new Date().toISOString().split('T')[0]
+    const event = match?.sumup_transaction_event_id ? eventById.get(match.sumup_transaction_event_id) : undefined
+    const metadata = {
+      receivable_id: receivable.id,
+      olist_id: receivable.olist_id,
+      situacao: receivable.situacao,
+      valor: receivable.valor,
+      saldo: receivable.saldo,
+      valor_pago: receivable.valor_pago,
+      reconciliation_status: match?.status ?? 'nao_reconciliado',
+    }
+
+    if (resolved && factualPaid !== null && factualPaid > 0) {
+      entries.push({
+        org_id: orgId,
+        event_date: receivable.data_liquidacao || event?.due_date || event?.event_date || dueDate,
+        competence_date: receivable.data_emissao || dueDate,
+        amount: factualPaid,
+        direction: 'entrada',
+        nature: 'OLIST_AR_ACTUAL',
+        source: 'olist',
+        source_id: receivable.id,
+        source_event_id: match?.sumup_transaction_event_id || match?.olist_accounts_receivable_id,
+        status: 'actual',
+        description: receivable.historico || receivable.numero_documento || 'Olist account receivable received',
+        metadata,
+      })
+    }
+
+    if (!resolved && hasKnownBalance && balance > 0) {
+      entries.push({
+        org_id: orgId,
+        event_date: dueDate,
+        competence_date: receivable.data_emissao || dueDate,
+        amount: balance,
+        direction: 'entrada',
+        nature: 'OLIST_AR_SCHEDULED',
+        source: 'olist',
+        source_id: receivable.id,
+        source_event_id: match?.sumup_transaction_event_id ? `${match.sumup_transaction_event_id}:remaining` : undefined,
+        status: 'scheduled',
+        description: receivable.historico || receivable.numero_documento || 'Olist account receivable scheduled',
+        metadata,
+      })
+    }
+  }
+
+  return entries
+}
+
+/** Populate manually entered cash movements; balance adjustments remain snapshots. */
+export async function populateLedgerFromManualEntries(admin: SupabaseClient, orgId: string) {
+  const entries = await fetchAllPages<{
+    id: string
+    type: string
+    amount: number
+    entry_date: string
+    description: string | null
+  }>(
+    (from, to) =>
+      admin
+        .from('manual_cash_entries')
+        .select('id, type, amount, entry_date, description')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .in('type', ['entrada', 'saida'])
+        .range(from, to),
+    'Failed to load manual_cash_entries for ledger'
+  )
+
+  return entries.map((entry): LedgerEntry => ({
+    org_id: orgId,
+    event_date: entry.entry_date,
+    competence_date: entry.entry_date,
+    amount: Math.abs(Number(entry.amount) || 0),
+    direction: entry.type === 'entrada' ? 'entrada' : 'saida',
+    nature: 'MANUAL_ENTRY',
+    source: 'manual',
+    source_id: entry.id,
+    status: 'actual',
+    description: entry.description || 'Manual cash entry',
+    metadata: { manual_entry_id: entry.id, type: entry.type },
+  }))
 }
 
 /**
@@ -292,7 +469,9 @@ export async function populateLedgerFromTaxes(admin: SupabaseClient, orgId: stri
 
 /**
  * Batch insert ledger entries with deduplication
- * Uses (org_id, source, source_id, event_date) as dedup key
+ * Uses (org_id, source, source_id, source_event_id, event_date) as dedup key.
+ * source_event_id is required for sources that legitimately have multiple
+ * events with a null/shared source_id on the same date.
  */
 export async function insertLedgerEntriesBatch(admin: SupabaseClient, entries: LedgerEntry[]) {
   if (entries.length === 0) {
@@ -301,23 +480,28 @@ export async function insertLedgerEntriesBatch(admin: SupabaseClient, entries: L
 
   // Check for existing entries to avoid duplicates
   const sources = [...new Set(entries.map((e) => e.source))]
-  const sourceIds = entries.filter((e) => e.source_id).map((e) => e.source_id)
+  const existing = await fetchAllPages<{ id: string; source: string; source_id: string | null; source_event_id: string | null; event_date: string }>(
+    (from, to) =>
+      admin
+        .from('financial_ledger')
+        .select('id, source, source_id, source_event_id, event_date')
+        .eq('org_id', entries[0].org_id)
+        .in('source', sources)
+        .range(from, to),
+    'Failed to load existing ledger entries for deduplication'
+  )
 
-  const { data: existing, error: existingError } = await admin
-    .from('financial_ledger')
-    .select('id, source, source_id, event_date')
-    .eq('org_id', entries[0].org_id)
-    .in('source', sources)
-    .in('source_id', sourceIds.length > 0 ? sourceIds : ['NULL'])
-
-  if (existingError && existingError.code !== 'PGRST116') {
-    throw existingError
-  }
-
-  const existingSet = new Set((existing || []).map((e) => `${e.source}:${e.source_id}:${e.event_date}`))
+  const ledgerKey = (entry: { source: string; source_id?: string | null; source_event_id?: string | null; event_date: string }) =>
+    `${entry.source}:${entry.source_id || 'NULL'}:${entry.source_event_id || 'NULL'}:${entry.event_date}`
+  const existingSet = new Set(existing.map((e) => ledgerKey(e)))
 
   // Filter out duplicates
-  const newEntries = entries.filter((e) => !existingSet.has(`${e.source}:${e.source_id}:${e.event_date}`))
+  const newEntries = entries.filter((e) => {
+    const key = ledgerKey(e)
+    if (existingSet.has(key)) return false
+    existingSet.add(key)
+    return true
+  })
 
   if (newEntries.length === 0) {
     return { inserted: 0, skipped: entries.length, errors: [] }
@@ -343,18 +527,21 @@ export async function insertLedgerEntriesBatch(admin: SupabaseClient, entries: L
     metadata: e.metadata || null,
   }))
 
-  // Batch insert
-  const { error: insertError, data } = await admin.from('financial_ledger').insert(toInsert)
-
-  if (insertError) {
-    return {
-      inserted: 0,
-      skipped: entries.length - newEntries.length,
-      errors: [{ code: insertError.code, message: insertError.message }],
+  // Keep inserts bounded so a large event history does not exceed the
+  // PostgREST request size limit or fail as one opaque all-or-nothing request.
+  const errors: { code?: string; message: string }[] = []
+  let inserted = 0
+  for (let offset = 0; offset < toInsert.length; offset += 500) {
+    const batch = toInsert.slice(offset, offset + 500)
+    const { error: insertError } = await admin.from('financial_ledger').insert(batch)
+    if (insertError) {
+      errors.push({ code: insertError.code, message: insertError.message })
+      continue
     }
+    inserted += batch.length
   }
 
-  return { inserted: newEntries.length, skipped: entries.length - newEntries.length, errors: [] }
+  return { inserted, skipped: entries.length - newEntries.length, errors }
 }
 
 /**
@@ -373,8 +560,14 @@ export async function syncLedgerFromAllSources(orgId: string) {
     const sumupFees = await populateLedgerFromSumUpFees(admin, orgId)
     allEntries.push(...sumupFees)
 
+    const olistReceivables = await populateLedgerFromOlistReceivables(admin, orgId)
+    allEntries.push(...olistReceivables)
+
     const olistPayables = await populateLedgerFromOlistPayables(admin, orgId)
     allEntries.push(...olistPayables)
+
+    const manualEntries = await populateLedgerFromManualEntries(admin, orgId)
+    allEntries.push(...manualEntries)
 
     const forecast = await populateLedgerFromForecast(admin, orgId)
     allEntries.push(...forecast)

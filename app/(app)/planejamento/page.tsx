@@ -6,6 +6,7 @@ import { loadMonthlyRevenue } from '@/lib/analytics/engine'
 import { formatBRL } from '@/lib/format/currency'
 import { PlanningTabbedGrid } from '@/components/forecast/planning-tabbed-grid'
 import { NewVersionForm } from '@/components/forecast/new-version-form'
+import { buildPlanningMonthlySummary } from '@/lib/planning/monthly-summary'
 
 export default async function PlanejamentoPage({
   searchParams,
@@ -30,15 +31,12 @@ export default async function PlanejamentoPage({
   const cmvProjections = await loadCMVProjectionsForVersion(selected.id)
   const projectedAR = await loadProjectedARForVersion(selected.id)
   const monthlyRevenue = await loadMonthlyRevenue(member.orgId, 12, new Date('2026-06-01T00:00:00Z'), new Date('2026-09-30T23:59:59Z'))
-  const monthlyByKey = new Map(monthlyRevenue.map((month) => [month.month.slice(0, 7), month]))
-  const summaryRows = entries
+  const summaryRows = buildPlanningMonthlySummary(
+    entries
     .filter((entry) => entry.ano === 2026 && entry.mes >= 6 && entry.mes <= 8)
-    .map((entry) => {
-      const planningKey = `${entry.ano}-${String(entry.mes).padStart(2, '0')}`
-      const nextMonth = entry.mes === 12 ? `${entry.ano + 1}-01` : `${entry.ano}-${String(entry.mes + 1).padStart(2, '0')}`
-      const actual = monthlyByKey.get(nextMonth)
-      return { ...entry, total: entry.value, realizado: actual?.realized ?? null, pendente: actual?.pending ?? null, faturas: actual?.invoiceCount ?? null, planningKey }
-    })
+    .map((entry) => ({ ano: entry.ano, mes: entry.mes, value: entry.value })),
+    monthlyRevenue,
+  )
   const summaryTotals = summaryRows.reduce((sum, row) => ({ total: sum.total + row.total, realizado: sum.realizado + (row.realizado ?? 0), pendente: sum.pendente + (row.pendente ?? 0) }), { total: 0, realizado: 0, pendente: 0 })
   const canEdit = canEditForecast(member.role)
 

@@ -1,7 +1,9 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { canManageCashBalance } from '@/lib/auth/rbac'
-import { loadCashFlowEntries, resolveOpeningBalance, buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { resolveOpeningBalance, buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
 import { getMinimumProjectedBalance } from '@/lib/cash-flow/aggregate'
+import { calculateDashboardKpis } from '@/lib/cash-flow/dashboard-kpis'
 import { diffDaysFromToday, shiftDateString } from '@/lib/cash-flow/dates'
 import { toLocalDateParam } from '@/lib/integrations/date'
 import { formatBRL } from '@/lib/format/currency'
@@ -58,7 +60,7 @@ export default async function VisaoGeralPage() {
   const from = shiftDateString(today, -90)
   const to = shiftDateString(today, 90)
 
-  const entries = await loadCashFlowEntries(member.orgId)
+  const entries = await loadCanonicalCashFlow(member.orgId)
   const days = await buildCashFlowDays(member.orgId, from, to, entries)
 
   // Independently anchored at "today" (not `from`, which is 90 days in the
@@ -71,10 +73,7 @@ export default async function VisaoGeralPage() {
   const saldoAtual = currentBalance?.balance ?? null
   const saldoAtualAsOf = currentBalance?.asOf ?? null
 
-  const next30 = days.filter((d) => d.date >= today && d.date <= shiftDateString(today, 30))
-  const entradas30 = next30.reduce((sum, d) => sum + d.entradas.realizado + d.entradas.contratado, 0)
-  const saidas30 = next30.reduce((sum, d) => sum + d.saidas.realizado + d.saidas.contratado, 0)
-  const saldoEm30 = next30.length > 0 ? next30[next30.length - 1].saldoFinal : null
+  const kpis = calculateDashboardKpis(days, today, saldoAtual)
 
   const minimum = getMinimumProjectedBalance(days.filter((d) => d.date >= today))
 
@@ -168,7 +167,7 @@ export default async function VisaoGeralPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             <MetricCard
               label="Saldo Atual"
-              value={saldoAtual != null ? formatBRL(saldoAtual) : '—'}
+              value={kpis.saldoAtual != null ? formatBRL(kpis.saldoAtual) : '—'}
               accentColor="#082d74"
               footnote={
                 saldoAtualAsOf && saldoAtualAsOf !== today
@@ -178,19 +177,19 @@ export default async function VisaoGeralPage() {
             />
             <MetricCard
               label="Entradas (30 dias)"
-              value={formatBRL(entradas30)}
+              value={formatBRL(kpis.entradas30)}
               accentColor="#1c6e3c"
               footnote="Próximos 30 dias"
             />
             <MetricCard
               label="Saídas (30 dias)"
-              value={formatBRL(saidas30)}
+              value={formatBRL(kpis.saidas30)}
               accentColor="#c2341e"
               footnote="Próximos 30 dias"
             />
             <MetricCard
               label="Saldo em 30 dias"
-              value={saldoEm30 != null ? formatBRL(saldoEm30) : '—'}
+              value={kpis.saldoEm30 != null ? formatBRL(kpis.saldoEm30) : '—'}
               accentColor="#846340"
               footnote="Projetado"
             />
