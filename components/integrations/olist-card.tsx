@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDateBR } from '@/lib/format/date'
 
@@ -8,15 +9,27 @@ type Props = {
   status: 'desconectado' | 'conectado' | 'precisa_reautorizar'
   connectedAt: string | null
   canManage: boolean
+  lastSyncAt?: string | null
+  lastSyncStatus?: 'success' | 'failed' | 'running' | null
+  payableCategories?: { categorized: number; total: number; coveragePct: number }
+  autoSync?: boolean
 }
 
 const STATUS_LABEL: Record<Props['status'], string> = {
   desconectado: 'Desconectado',
   conectado: 'Conectado',
-  precisa_reautorizar: 'Precisa reautorizar',
+  precisa_reautorizar: 'Autorização expirada',
 }
 
-export function OlistCard({ status, connectedAt, canManage }: Props) {
+export function OlistCard({
+  status,
+  connectedAt,
+  canManage,
+  lastSyncAt = null,
+  lastSyncStatus = null,
+  payableCategories = { categorized: 0, total: 0, coveragePct: 100 },
+  autoSync = false,
+}: Props) {
   const router = useRouter()
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -40,6 +53,9 @@ export function OlistCard({ status, connectedAt, canManage }: Props) {
       if (!response.ok || !data.ok) {
         setSyncError(data.error ?? 'Falha ao sincronizar')
       } else {
+        if (autoSync) {
+          await fetch('/api/integracoes/olist/payables/backfill', { method: 'POST' })
+        }
         router.refresh()
       }
     } catch {
@@ -52,15 +68,40 @@ export function OlistCard({ status, connectedAt, canManage }: Props) {
     }
   }
 
+  useEffect(() => {
+    if (autoSync && canManage && status === 'conectado') {
+      const timer = window.setTimeout(() => void handleSync(), 0)
+      return () => window.clearTimeout(timer)
+    }
+    // The callback query is a one-shot trigger; the sync function itself is stable for this mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSync])
+
   const needsConnect = status === 'desconectado' || status === 'precisa_reautorizar'
+  const syncLabel = lastSyncStatus === 'failed'
+    ? 'Erro de sincronização'
+    : lastSyncStatus === 'running'
+      ? 'Sincronizando'
+      : status === 'precisa_reautorizar'
+        ? 'Autorização expirada'
+        : STATUS_LABEL[status]
 
   return (
     <div className="rounded-lg border bg-white p-4">
       <h2 className="font-medium">Olist ERP</h2>
       <p className="mt-1 text-sm text-neutral-600">
-        Status: {STATUS_LABEL[status]}
+        Status: {syncLabel}
         {connectedAt && status === 'conectado' && ` — conectado em ${formatDateBR(connectedAt)}`}
       </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Última sincronização: {lastSyncAt ? formatDateBR(lastSyncAt) : 'Nunca'}
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Contas a pagar categorizadas: {payableCategories.categorized}/{payableCategories.total} ({payableCategories.coveragePct.toFixed(1)}%)
+      </p>
+      {payableCategories.coveragePct < 100 && payableCategories.total > 0 && (
+        <p className="mt-1 text-xs text-amber-700">A cobertura será atualizada quando o detalhe da Olist estiver disponível.</p>
+      )}
       {canManage ? (
         <div className="mt-3 flex gap-2">
           {needsConnect ? (

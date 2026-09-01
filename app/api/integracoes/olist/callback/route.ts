@@ -38,5 +38,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/integracoes?olist_erro=falha_conexao`)
   }
 
-  return NextResponse.redirect(`${origin}/integracoes?olist_conectado=1`)
+  return NextResponse.redirect(`${origin}/integracoes?olist_conectado=1&sync=1`)
 }

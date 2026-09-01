@@ -157,6 +157,16 @@ export async function olistFetch<T>(
     const detail = await response.text()
     lastError = new Error(`Olist API request failed (${response.status}) for ${path}: ${detail}`)
 
+    if (response.status === 401) {
+      const admin = createAdminSupabaseClient()
+      await admin
+        .from('integration_connections')
+        .update({ status: 'precisa_reautorizar', updated_at: new Date().toISOString() })
+        .eq('org_id', orgId)
+        .eq('provider', 'olist')
+      throw lastError
+    }
+
     if (!RETRY_STATUS_CODES.has(response.status) || attempt === MAX_RETRIES - 1) {
       throw lastError
     }
