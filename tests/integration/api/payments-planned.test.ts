@@ -3,6 +3,21 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 const uuid = () => crypto.randomUUID()
 
+async function createTestUser(admin: ReturnType<typeof createAdminSupabaseClient>) {
+  const { data, error } = await admin.auth.admin.createUser({
+    email: `integration-${uuid()}@example.com`,
+    password: `${uuid()}Aa1!`,
+    email_confirm: true,
+  })
+  if (error || !data.user) throw error ?? new Error('Failed to create local integration user')
+  return data.user.id
+}
+
+async function assertDatabaseResult(result: PromiseLike<{ error: { message: string } | null }>) {
+  const resolved = await result
+  if (resolved.error) throw new Error(resolved.error.message)
+}
+
 describe('POST /api/payments/planned', () => {
   let testOrgId: string
   let testProfileId: string
@@ -10,40 +25,37 @@ describe('POST /api/payments/planned', () => {
 
   beforeAll(async () => {
     testOrgId = uuid()
-    testProfileId = uuid()
     testApId = uuid()
 
     const admin = createAdminSupabaseClient()
+    testProfileId = await createTestUser(admin)
 
-    await admin.from('organizations').insert({ id: testOrgId, name: 'Test Org' })
+    await assertDatabaseResult(admin.from('organizations').insert({ id: testOrgId, name: 'Test Org' }))
 
-    await admin.from('profiles').insert({
-      id: testProfileId,
-      email: `test-${uuid()}@example.com`,
-      name: 'Test User',
-    })
-
-    await admin.from('olist_organizations_members').insert({
+    await assertDatabaseResult(admin.from('organization_members').insert({
       org_id: testOrgId,
       profile_id: testProfileId,
-      role: 'admin',
-    })
+      role: 'OWNER_ADMIN',
+    }))
 
-    await admin.from('olist_accounts_payable').insert({
+    await assertDatabaseResult(admin.from('olist_accounts_payable').insert({
       id: testApId,
+      olist_id: Number.parseInt(testApId.replaceAll('-', '').slice(0, 8), 16),
       org_id: testOrgId,
       valor: 1000,
       data_vencimento: '2025-02-15',
-      descricao_produto: 'Test Payment',
-    })
+      historico: 'Test Payment',
+      saldo: 1000,
+      raw: {},
+    }))
   })
 
   afterAll(async () => {
     const admin = createAdminSupabaseClient()
     await admin.from('olist_accounts_payable').delete().eq('org_id', testOrgId)
-    await admin.from('olist_organizations_members').delete().eq('org_id', testOrgId)
-    await admin.from('profiles').delete().eq('id', testProfileId)
+    await admin.from('organization_members').delete().eq('org_id', testOrgId)
     await admin.from('organizations').delete().eq('id', testOrgId)
+    await admin.auth.admin.deleteUser(testProfileId)
   })
 
   it('should save a planned payment', async () => {
@@ -82,16 +94,17 @@ describe('POST /api/payments/planned', () => {
       created_by: testProfileId,
     })
 
-    const { data: upserted } = await admin
+    const { data: upserted, error: upsertError } = await admin
       .from('planned_payments')
       .upsert({
         org_id: testOrgId,
         ap_id: testApId,
         planned_date: plannedDate2,
         created_by: testProfileId,
-      })
+      }, { onConflict: 'org_id,ap_id' })
       .select()
 
+    if (upsertError) throw new Error(upsertError.message)
     expect(upserted).toHaveLength(1)
     expect(upserted?.[0]?.planned_date).toBe(plannedDate2)
   })
@@ -121,33 +134,28 @@ describe('POST /api/payments/planned', () => {
 describe('POST /api/payments/scenarios', () => {
   let testOrgId: string
   let testProfileId: string
+  let testApId: string
 
   beforeAll(async () => {
     testOrgId = uuid()
-    testProfileId = uuid()
-
+    testApId = uuid()
     const admin = createAdminSupabaseClient()
+    testProfileId = await createTestUser(admin)
 
-    await admin.from('organizations').insert({ id: testOrgId, name: 'Test Org' })
-
-    await admin.from('profiles').insert({
-      id: testProfileId,
-      email: `test-${uuid()}@example.com`,
-      name: 'Test User',
-    })
-
-    await admin.from('olist_organizations_members').insert({
+    await assertDatabaseResult(admin.from('organizations').insert({ id: testOrgId, name: 'Test Org' }))
+    await assertDatabaseResult(admin.from('organization_members').insert({
       org_id: testOrgId,
       profile_id: testProfileId,
-      role: 'admin',
-    })
+      role: 'OWNER_ADMIN',
+    }))
+    await assertDatabaseResult(admin.from('olist_accounts_payable').insert({ id: testApId, olist_id: Number.parseInt(testApId.replaceAll('-', '').slice(0, 8), 16), org_id: testOrgId, valor: 1000, saldo: 1000, raw: {} }))
   })
 
   afterAll(async () => {
     const admin = createAdminSupabaseClient()
-    await admin.from('olist_organizations_members').delete().eq('org_id', testOrgId)
-    await admin.from('profiles').delete().eq('id', testProfileId)
+    await admin.from('organization_members').delete().eq('org_id', testOrgId)
     await admin.from('organizations').delete().eq('id', testOrgId)
+    await admin.auth.admin.deleteUser(testProfileId)
   })
 
   it('should create a payment scenario', async () => {
@@ -171,8 +179,6 @@ describe('POST /api/payments/scenarios', () => {
 
   it('should create scenario with adjustments', async () => {
     const admin = createAdminSupabaseClient()
-    const apId = uuid()
-
     const { data: scenarios } = await admin
       .from('payment_scenarios')
       .insert({
@@ -186,7 +192,7 @@ describe('POST /api/payments/scenarios', () => {
 
     await admin.from('scenario_adjustments').insert({
       scenario_id: scenarioId,
-      ap_id: apId,
+      ap_id: testApId,
       days_delta: 30,
       percentage: 80,
     })

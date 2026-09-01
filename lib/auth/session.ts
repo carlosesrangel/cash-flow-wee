@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import type { OrganizationRole } from '@/lib/validation/auth'
 
 export type CurrentMember = {
@@ -19,6 +20,7 @@ export async function getCurrentMember(): Promise<CurrentMember> {
     .from('organization_members')
     .select('org_id, profile_id, role')
     .eq('profile_id', user.id)
+    .eq('active', true)
     .limit(1)
     .maybeSingle()
 
@@ -37,7 +39,8 @@ export async function getCurrentMember(): Promise<CurrentMember> {
   // Usuário não tem organização — criar uma padrão automaticamente
   const orgName = user.email ? user.email.split('@')[0] : 'Minha Organização'
 
-  const { data: newOrg, error: orgError } = await supabase
+  const admin = createAdminSupabaseClient()
+  const { data: newOrg, error: orgError } = await admin
     .from('organizations')
     .insert([{ name: orgName }])
     .select('id')
@@ -47,7 +50,7 @@ export async function getCurrentMember(): Promise<CurrentMember> {
     throw new Error(`Falha ao criar organização padrão: ${orgError?.message || 'Desconhecido'}`)
   }
 
-  const { data: newMember, error: memberError } = await supabase
+  const { data: newMember, error: memberError } = await admin
     .from('organization_members')
     .insert([
       {

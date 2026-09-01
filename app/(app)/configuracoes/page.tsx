@@ -1,6 +1,7 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { getOlistConnectionStatus } from '@/lib/olist/status'
+import { loadIntegrationFreshness } from '@/lib/integrations/freshness'
 import { checkSumupStatus } from '@/lib/sumup/status'
 import { canManageIntegrations } from '@/lib/auth/rbac'
 import { DEFAULT_TAX_RATE } from '@/lib/tax/engine'
@@ -8,6 +9,8 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
+import { UserManagement } from '@/components/settings/user-management'
+import { canManageUsers } from '@/lib/auth/rbac'
 
 const ROLE_LABEL: Record<string, string> = {
   OWNER_ADMIN: 'Administrador',
@@ -23,10 +26,11 @@ export default async function ConfiguracoesPage() {
 
   const admin = createAdminSupabaseClient()
 
-  const [{ data: org }, { data: members }, olistStatus] = await Promise.all([
+  const [{ data: org }, { data: members }, olistStatus, freshness] = await Promise.all([
     admin.from('organizations').select('id, name, created_at').eq('id', member.orgId).single(),
-    admin.from('organization_members').select('id, profile_id, role, created_at').eq('org_id', member.orgId),
+    admin.from('organization_members').select('id, profile_id, role, active, created_at').eq('org_id', member.orgId),
     getOlistConnectionStatus(member.orgId),
+    loadIntegrationFreshness(member.orgId),
   ])
 
   const canManage = canManageIntegrations(member.role)
@@ -85,17 +89,30 @@ export default async function ConfiguracoesPage() {
               <div>
                 <p className="font-medium text-foreground">Olist ERP</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {olistStatus.connectedAt
-                    ? `Conectado em ${new Date(olistStatus.connectedAt).toLocaleDateString('pt-BR')}`
-                    : 'Não conectado'}
+                  {olistStatus.status === 'precisa_reautorizar'
+                    ? 'Autorização expirada'
+                    : olistStatus.connectedAt
+                      ? `Conectado em ${new Date(olistStatus.connectedAt).toLocaleDateString('pt-BR')}`
+                      : 'Não conectado'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Última sync: {olistStatus.lastSyncAt ? new Date(olistStatus.lastSyncAt).toLocaleString('pt-BR') : 'Nunca'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Contas a pagar categorizadas: {olistStatus.payableCategories.categorized}/{olistStatus.payableCategories.total} ({olistStatus.payableCategories.coveragePct.toFixed(1)}%)
                 </p>
               </div>
               <Badge
                 variant={olistStatus.status === 'conectado' ? 'default' : 'destructive'}
                 className={olistStatus.status === 'conectado' ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-200' : ''}
               >
-                {olistStatus.status === 'conectado' ? 'Conectado' : olistStatus.status === 'precisa_reautorizar' ? 'Reautorizar' : 'Desconectado'}
+                {olistStatus.status === 'conectado' ? 'Conectado' : olistStatus.status === 'precisa_reautorizar' ? 'Autorização expirada' : 'Desconectado'}
               </Badge>
+              {canManage && olistStatus.status === 'precisa_reautorizar' && (
+                <a href="/api/integracoes/olist/connect" className="ml-3 text-xs font-medium text-primary underline">
+                  Reconectar Olist
+                </a>
+              )}
             </div>
             <div className="rounded-lg border border-border p-4 flex items-center justify-between">
               <div>
@@ -110,6 +127,12 @@ export default async function ConfiguracoesPage() {
               </Badge>
             </div>
           </div>
+          <div className="mt-4 grid gap-3 rounded-lg border border-border p-4 text-xs text-muted-foreground sm:grid-cols-2">
+            <p>Tiny/Olist — {freshness.lastOlistSync ? new Date(freshness.lastOlistSync).toLocaleString('pt-BR') : 'Nunca'} ({freshness.olistStatus ?? 'sem execução'})</p>
+            <p>SumUp — {freshness.lastSumupSync ? new Date(freshness.lastSumupSync).toLocaleString('pt-BR') : 'Nunca'} ({freshness.sumupStatus ?? 'sem execução'})</p>
+            <p>Financeiro — {freshness.lastAnalyticsRefresh ? new Date(freshness.lastAnalyticsRefresh).toLocaleString('pt-BR') : 'Nunca'}</p>
+            <p>Ledger — {freshness.lastLedgerRefresh ? new Date(freshness.lastLedgerRefresh).toLocaleString('pt-BR') : 'Nunca'}</p>
+          </div>
           <p className="text-xs text-muted-foreground mt-4">
             Gerencie conexões e reautorização na aba <span className="font-medium">Integrações</span>. A sincronização
             automática roda diariamente via GitHub Actions (Olist 02:00 UTC, SumUp 03:00 UTC).
@@ -123,7 +146,7 @@ export default async function ConfiguracoesPage() {
           <CardTitle className="text-lg">Usuários</CardTitle>
         </CardHeader>
         <CardContent>
-          {(members ?? []).length === 0 ? (
+          {canManageUsers(member.role) ? <UserManagement /> : (members ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhum usuário encontrado.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border">

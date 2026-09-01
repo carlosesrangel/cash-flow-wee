@@ -7,8 +7,8 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const admin = createClient(url, serviceKey)
 
-const OUTSIDER_EMAIL = 'outsider-rls-test@wee.com.br'
-const OUTSIDER_PASSWORD = 'senha12345'
+const OUTSIDER_EMAIL = `outsider-${crypto.randomUUID()}@example.test`
+const OUTSIDER_PASSWORD = `${crypto.randomUUID()}Aa1!`
 
 // Best-effort lookup + delete of any pre-existing user with this email.
 // Guards against orphaned state from a previous interrupted run (process

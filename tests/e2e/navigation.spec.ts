@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { NAV_ITEMS } from '@/lib/nav'
 
+const email = process.env.E2E_USER_EMAIL
+const password = process.env.E2E_USER_PASSWORD
+const hasCredentials = Boolean(email && password)
+
 function flattenHrefs(items: typeof NAV_ITEMS): string[] {
   const hrefs = items.flatMap((item) => [item.href, ...(item.children?.map((c) => c.href) ?? [])])
   // Dedupe: a parent item's own href can equal its first child's href
@@ -10,10 +14,11 @@ function flattenHrefs(items: typeof NAV_ITEMS): string[] {
 }
 
 test.describe('authenticated navigation', () => {
+  test.skip(!hasCredentials, 'E2E_USER_EMAIL/E2E_USER_PASSWORD not provided')
   test.beforeEach(async ({ page }) => {
     await page.goto('/login')
-    await page.getByLabel('E-mail').fill('test@wee.com.br')
-    await page.getByLabel('Senha').fill('senha12345')
+    await page.getByLabel('E-mail').fill(email!)
+    await page.getByLabel('Senha').fill(password!)
     await page.getByRole('button', { name: 'Entrar' }).click()
     await expect(page).toHaveURL(/\/visao-geral/)
   })

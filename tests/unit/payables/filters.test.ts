@@ -41,4 +41,21 @@ describe('payable filters and totals', () => {
       openOver7Balance: 0,
     })
   })
+
+  it('reconciles exclusive production status counts without double counting due soon', () => {
+    const productionRows: PayableFilterRow[] = [
+      ...Array.from({ length: 204 }, () => ({ ...rows[2], payableStatus: status('pago', 0, 100, '2026-08-31') })),
+      ...Array.from({ length: 68 }, () => ({ ...rows[0], payableStatus: status('aberto', 100, 100, '2026-08-31') })),
+      ...Array.from({ length: 2 }, () => ({ ...rows[1], payableStatus: status('aberto', 50, 100, '2026-09-01') })),
+      ...Array.from({ length: 183 }, () => ({ ...rows[0], payableStatus: status('aberto', 100, 100, '2026-09-20'), saldo: 100 })),
+    ]
+    const counts = getPayableStatusCounts(productionRows)
+    const exclusive = productionRows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.payableStatus.status] = (acc[row.payableStatus.status] ?? 0) + 1
+      return acc
+    }, {})
+    expect({ total: productionRows.length, ...exclusive, cancelled: exclusive.cancelled ?? 0 }).toMatchObject({ total: 457, paid: 204, overdue: 68, due_soon: 2, open: 183, cancelled: 0 })
+    expect((exclusive.paid ?? 0) + (exclusive.overdue ?? 0) + (exclusive.due_soon ?? 0) + (exclusive.open ?? 0) + (exclusive.cancelled ?? 0)).toBe(productionRows.length)
+    expect(counts.all).toBe(productionRows.length)
+  })
 })

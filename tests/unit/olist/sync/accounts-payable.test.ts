@@ -53,7 +53,15 @@ describe('syncAccountsPayable', () => {
 
     expect(result.received).toBe(1)
     const upsertedRows = upsert.mock.calls[0][0]
-    expect(upsertedRows[0]).toMatchObject({ org_id: ORG_ID, olist_id: 40, fornecedor_olist_id: 5 })
+    expect(upsertedRows[0]).toMatchObject({
+      org_id: ORG_ID,
+      olist_id: 40,
+      fornecedor_olist_id: 5,
+      categoria_id: 7,
+      categoria: 'Fornecedores',
+      valor_pago: 0,
+      data_liquidacao: null,
+    })
   })
 
   it('converts empty-string data/dataVencimento to null before upserting', async () => {
