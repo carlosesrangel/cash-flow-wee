@@ -1,6 +1,6 @@
 /**
  * Ledger population functions
- * Populates the canonical financial ledger from SumUp, Tiny, and forecast sources
+ * Populates the canonical financial ledger from SumUp, Olist, and forecast sources
  *
  * Core principle: Every cash movement must have exactly one ledger entry
  * No double-counting, full audit trail, immutable history
@@ -33,7 +33,7 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
     .from('sumup_transaction_events')
     .select(`
       id,
-      sumup_transaction_id,
+      transaction_id,
       transaction:sumup_transactions(
         id,
         timestamp_utc,
@@ -43,8 +43,7 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
       status,
       event_date,
       due_date,
-      amount,
-      created_at
+      amount
     `)
     .eq('org_id', orgId)
     .in('status', ['RECONCILED', 'SETTLED', 'SCHEDULED', 'PENDING'])
@@ -72,7 +71,7 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
       status: payout.status === 'RECONCILED' || payout.status === 'SETTLED' ? 'actual' : 'scheduled',
       description: `SumUp payout: ${payout.event_type}`,
       metadata: {
-        transaction_id: payout.sumup_transaction_id,
+        transaction_id: payout.transaction_id,
         event_type: payout.event_type,
         event_status: payout.status,
       },
@@ -123,13 +122,16 @@ export async function populateLedgerFromSumUpFees(admin: SupabaseClient, orgId: 
 }
 
 /**
- * Populate ledger from Tiny payables (sales/refunds)
+ * Populate ledger from Olist accounts payable.
+ *
+ * The payable balance is the amount still to be paid. For a paid or partially
+ * paid payable, only the factual paid amount becomes actual cash; any known
+ * remainder stays scheduled. Cancelled obligations do not create cash events.
  */
-export async function populateLedgerFromTinyPayables(admin: SupabaseClient, orgId: string) {
-  // Load Tiny payables
+export async function populateLedgerFromOlistPayables(admin: SupabaseClient, orgId: string) {
   const { data: payables, error } = await admin
-    .from('tiny_payables')
-    .select('id, tipo, valor, data_evento, data_pagamento, status, descricao')
+    .from('olist_accounts_payable')
+    .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico')
     .eq('org_id', orgId)
 
   if (error) {
@@ -138,27 +140,58 @@ export async function populateLedgerFromTinyPayables(admin: SupabaseClient, orgI
 
   const entries: LedgerEntry[] = []
   for (const payable of payables || []) {
-    const isIncome = payable.tipo === 'VENDA' || payable.tipo === 'RECEITA'
-    const direction = isIncome ? 'entrada' : 'saida'
-    const nature = payable.tipo === 'VENDA' ? 'TINY_SALE' : payable.tipo === 'DEVOLUCAO' ? 'TINY_REFUND' : `TINY_${payable.tipo}`
+    const situation = String(payable.situacao || '').trim().toLowerCase()
+    if (situation === 'cancelada' || situation === 'cancelado') continue
 
-    entries.push({
-      org_id: orgId,
-      event_date: payable.data_evento || new Date().toISOString().split('T')[0],
-      competence_date: payable.data_pagamento || payable.data_evento,
-      amount: Math.abs(payable.valor || 0),
-      direction,
-      nature,
-      source: 'tiny',
-      source_id: payable.id,
-      status: payable.status === 'PAGO' ? 'actual' : payable.status === 'AGENDADO' ? 'scheduled' : 'scheduled',
-      description: payable.descricao || `Tiny: ${payable.tipo}`,
-      metadata: {
-        payable_id: payable.id,
-        tipo: payable.tipo,
-        status: payable.status,
-      },
-    })
+    const value = Number(payable.valor)
+    const balance = Number(payable.saldo)
+    const paidValue = Number(payable.valor_pago)
+    const hasKnownValue = Number.isFinite(value) && value > 0
+    const hasKnownBalance = Number.isFinite(balance) && balance >= 0
+    const derivedPaid = hasKnownValue && hasKnownBalance ? Math.max(value - balance, 0) : null
+    const factualPaid = Number.isFinite(paidValue) && paidValue >= 0 ? paidValue : derivedPaid
+    const dueDate = payable.data_vencimento || payable.data_emissao || new Date().toISOString().split('T')[0]
+    const metadata = {
+      payable_id: payable.id,
+      olist_id: payable.olist_id,
+      situacao: payable.situacao,
+      valor: payable.valor,
+      saldo: payable.saldo,
+      valor_pago: payable.valor_pago,
+    }
+
+    if (factualPaid !== null && factualPaid > 0) {
+      entries.push({
+        org_id: orgId,
+        event_date: payable.data_liquidacao || dueDate,
+        competence_date: payable.data_emissao || dueDate,
+        amount: factualPaid,
+        direction: 'saida',
+        nature: 'OLIST_PAYABLE_ACTUAL',
+        source: 'olist',
+        source_id: payable.id,
+        status: 'actual',
+        description: payable.historico || 'Olist account payable paid',
+        metadata,
+      })
+    }
+
+    const remaining = hasKnownBalance ? balance : null
+    if (remaining !== null && remaining > 0) {
+      entries.push({
+        org_id: orgId,
+        event_date: dueDate,
+        competence_date: payable.data_emissao || dueDate,
+        amount: remaining,
+        direction: 'saida',
+        nature: 'OLIST_PAYABLE_SCHEDULED',
+        source: 'olist',
+        source_id: payable.id,
+        status: 'scheduled',
+        description: payable.historico || 'Olist account payable scheduled',
+        metadata,
+      })
+    }
   }
 
   return entries
@@ -171,8 +204,8 @@ export async function populateLedgerFromForecast(admin: SupabaseClient, orgId: s
   // Load forecast entries (future revenue projections)
   const { data: forecast, error } = await admin
     .from('forecast_entries')
-    .select('id, ano, mes, receita')
-    .eq('org_id', orgId)
+    .select('id, ano, mes, receita, forecast_versions!inner(org_id)')
+    .eq('forecast_versions.org_id', orgId)
     .gte('ano', new Date().getFullYear())
 
   if (error) {
@@ -225,7 +258,10 @@ export async function populateLedgerFromTaxes(admin: SupabaseClient, orgId: stri
   }
 
   // For now, project Simples Nacional based on forecast
-  const { data: forecast } = await admin.from('forecast_entries').select('ano, mes, receita').eq('org_id', orgId)
+  const { data: forecast } = await admin
+    .from('forecast_entries')
+    .select('ano, mes, receita, forecast_versions!inner(org_id)')
+    .eq('forecast_versions.org_id', orgId)
 
   const entries: LedgerEntry[] = []
   for (const entry of forecast || []) {
@@ -337,8 +373,8 @@ export async function syncLedgerFromAllSources(orgId: string) {
     const sumupFees = await populateLedgerFromSumUpFees(admin, orgId)
     allEntries.push(...sumupFees)
 
-    const tinyPayables = await populateLedgerFromTinyPayables(admin, orgId)
-    allEntries.push(...tinyPayables)
+    const olistPayables = await populateLedgerFromOlistPayables(admin, orgId)
+    allEntries.push(...olistPayables)
 
     const forecast = await populateLedgerFromForecast(admin, orgId)
     allEntries.push(...forecast)
