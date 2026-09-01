@@ -181,14 +181,14 @@ describe('Fee Fallback - GD02', () => {
     expect(result.source).toBe('COMBINACAO_EXATA')
   })
 
-  it('lookupProjectedSaleFeeRate: No match returns 0', async () => {
+  it('lookupProjectedSaleFeeRate: No match remains unknown', async () => {
     mockAdmin = createMockSupabaseClient({
       sumup_fee_rates_12m: [],
     })
 
     const result = await lookupProjectedSaleFeeRate(mockAdmin, 'org1', 'UNKNOWN', 'UNKNOWN', 1, 'UNKNOWN', 'UNKNOWN')
 
-    expect(result.taxa).toBe(0)
+    expect(result.taxa).toBeNull()
     expect(result.source).toBe('SEM_TAXA_HISTORICA')
   })
 

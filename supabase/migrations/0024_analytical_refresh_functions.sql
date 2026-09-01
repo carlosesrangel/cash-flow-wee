@@ -53,11 +53,11 @@ begin
     coalesce(sum(fee_amount), 0) as fee_total_12m,
     case when sum(case when fee_amount > 0 then amount else 0 end) > 0
       then coalesce(sum(fee_amount), 0) / sum(case when fee_amount > 0 then amount else 0 end)
-      else 0
+      else null
     end as taxa_media_simples,
-    case when sum(amount) > 0
+    case when sum(fee_amount) > 0
       then coalesce(sum(fee_amount), 0) / sum(amount)
-      else 0
+      else null
     end as taxa_media_ponderada,
     null::numeric as pct_valor_12m,  -- Will be updated in second pass
     null::numeric as pct_transacoes_12m,  -- Will be updated in second pass

@@ -11,7 +11,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { MetricCard } from '@/components/ui/metric-card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { PeriodFilter } from '@/components/filters/period-filter'
 import { Users } from 'lucide-react'
 
 export default function ClientesPage() {
@@ -19,6 +18,9 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<'ltv' | 'orders' | 'recent'>('ltv')
   const [rfvFilter, setRfvFilter] = useState<string | null>(null)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [customerDetail, setCustomerDetail] = useState<any>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     loadCustomers()
@@ -33,6 +35,18 @@ export default function ClientesPage() {
       // Silently fail and show empty state
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function openCustomer(customerId: string) {
+    if (customerId === 'null') return
+    setSelectedCustomerId(customerId)
+    setDetailLoading(true)
+    try {
+      const response = await fetch(`/api/analytics/customers/${customerId}`)
+      setCustomerDetail(response.ok ? await response.json() : null)
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -96,11 +110,8 @@ export default function ClientesPage() {
         description="Análise de clientes com segmentação RFV"
       />
 
-      {/* Period Filter */}
-      <PeriodFilter />
-
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
         <MetricCard
           label="Clientes Totais"
           value={customers.length.toString()}
@@ -109,6 +120,11 @@ export default function ClientesPage() {
         <MetricCard
           label="Valor Total (LTV)"
           value={formatBRL(totalLTV)}
+          accentColor="navy"
+        />
+        <MetricCard
+          label="Peças"
+          value={customers.reduce((sum, c) => sum + c.unitsSold, 0).toString()}
           accentColor="navy"
         />
         <MetricCard
@@ -187,6 +203,7 @@ export default function ClientesPage() {
                     <th className="px-4 py-3 font-medium">Cliente</th>
                     <th className="px-4 py-3 font-medium">RFV</th>
                     <th className="px-4 py-3 font-medium text-right">Valor Total</th>
+                    <th className="px-4 py-3 font-medium text-right">Peças</th>
                     <th className="px-4 py-3 font-medium text-right">Pedidos</th>
                     <th className="px-4 py-3 font-medium text-right">Ticket Médio</th>
                     <th className="px-4 py-3 font-medium">Última Venda</th>
@@ -198,8 +215,10 @@ export default function ClientesPage() {
                     return (
                       <tr key={c.customerId} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                         <td className="px-4 py-3">
+                          <button type="button" onClick={() => void openCustomer(c.customerId)} className="text-left hover:underline">
                           <div className="font-medium text-foreground">{c.customerName}</div>
                           <div className="text-xs text-muted-foreground">{c.customerId.slice(0, 8)}</div>
+                          </button>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.textColor}`}>
@@ -207,6 +226,9 @@ export default function ClientesPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-semibold">{formatBRL(c.lifetimeValue)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {c.unitsSold}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <Badge variant="secondary" className="text-xs">{c.orderCount}</Badge>
                         </td>
@@ -227,13 +249,13 @@ export default function ClientesPage() {
                 const config = getRFVSegmentBadge(c.rfv.rfvSegment)
                 return (
                   <div key={c.customerId} className="rounded-lg border border-border bg-muted/30 p-3">
-                    <div className="flex items-start justify-between gap-2 mb-2">
+                    <button type="button" onClick={() => void openCustomer(c.customerId)} className="w-full text-left"><div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-foreground truncate">{c.customerName}</p>
                         <p className="text-xs text-muted-foreground">{c.customerId.slice(0, 8)}</p>
                       </div>
                       <p className="font-mono font-semibold text-foreground whitespace-nowrap">{formatBRL(c.lifetimeValue)}</p>
-                    </div>
+                    </div></button>
                     <div className="mb-2">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.textColor}`}>
                         {config.emoji} {c.rfv.rfvSegment}
@@ -250,6 +272,8 @@ export default function ClientesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedCustomerId && <Card><CardContent className="pt-6">{detailLoading ? <Skeleton className="h-48" /> : customerDetail ? <div className="space-y-4"><div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">Detalhe do cliente</h2><p className="text-sm text-muted-foreground">{customerDetail.contact?.email || 'Contato sem e-mail'} · {customerDetail.contact?.telefone || customerDetail.contact?.celular || 'Telefone não informado'}</p></div><button type="button" onClick={() => { setSelectedCustomerId(null); setCustomerDetail(null) }} className="text-sm text-muted-foreground hover:text-foreground">Fechar</button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><MetricCard label="Valor total comprado" value={formatBRL(customerDetail.summary.revenue)} /><MetricCard label="Peças" value={customerDetail.summary.units} /><MetricCard label="Pedidos" value={customerDetail.summary.orders} /><MetricCard label="Ticket médio" value={formatBRL(customerDetail.summary.averageOrderValue)} /><MetricCard label="Primeira compra" value={customerDetail.summary.firstOrderDate ? formatDateOnlyBR(customerDetail.summary.firstOrderDate) : '—'} /><MetricCard label="Última compra" value={customerDetail.summary.lastOrderDate ? formatDateOnlyBR(customerDetail.summary.lastOrderDate) : '—'} /></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="py-2">Data</th><th className="py-2">Pedido</th><th className="py-2">Produto</th><th className="py-2">SKU</th><th className="py-2 text-right">Qtd.</th><th className="py-2 text-right">Valor unitário</th><th className="py-2 text-right">Valor total</th><th className="py-2">Status</th></tr></thead><tbody>{customerDetail.history.map((item: any, index: number) => <tr key={`${item.pedido}-${index}`} className="border-b last:border-0"><td className="py-2">{item.data ? formatDateOnlyBR(item.data) : '—'}</td><td className="py-2">{item.pedido ?? '—'}</td><td className="py-2">{item.produto ?? '—'}</td><td className="py-2">{item.sku ?? '—'}</td><td className="py-2 text-right">{item.quantidade ?? '—'}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorUnitario)}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorTotal)}</td><td className="py-2">{item.status ?? '—'}</td></tr>)}</tbody></table></div></div> : <p className="text-sm text-muted-foreground">Não foi possível carregar o detalhe.</p>}</CardContent></Card>}
     </div>
   )
 }

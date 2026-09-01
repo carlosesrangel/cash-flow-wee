@@ -37,18 +37,17 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
       transaction:sumup_transactions(
         id,
         timestamp_utc,
-        amount_gross,
-        fee,
-        amount_net
+        amount
       ),
       event_type,
-      event_status,
-      payout_date,
+      status,
+      event_date,
+      due_date,
       amount,
       created_at
     `)
     .eq('org_id', orgId)
-    .in('event_status', ['RECONCILED', 'SCHEDULED', 'PENDING'])
+    .in('status', ['RECONCILED', 'SETTLED', 'SCHEDULED', 'PENDING'])
 
   if (error) {
     throw error
@@ -62,7 +61,7 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
     // Actual payout (entrada)
     entries.push({
       org_id: orgId,
-      event_date: payout.payout_date || new Date().toISOString().split('T')[0],
+      event_date: payout.due_date || payout.event_date || new Date().toISOString().split('T')[0],
       competence_date: transaction.timestamp_utc?.split('T')[0],
       amount: payout.amount || 0,
       direction: 'entrada',
@@ -70,12 +69,12 @@ export async function populateLedgerFromSumUpPayouts(admin: SupabaseClient, orgI
       source: 'sumup',
       source_id: transaction.id,
       source_event_id: payout.id,
-      status: payout.event_status === 'RECONCILED' ? 'actual' : payout.event_status === 'SCHEDULED' ? 'scheduled' : 'scheduled',
+      status: payout.status === 'RECONCILED' || payout.status === 'SETTLED' ? 'actual' : 'scheduled',
       description: `SumUp payout: ${payout.event_type}`,
       metadata: {
         transaction_id: payout.sumup_transaction_id,
         event_type: payout.event_type,
-        event_status: payout.event_status,
+        event_status: payout.status,
       },
     })
   }
@@ -90,10 +89,10 @@ export async function populateLedgerFromSumUpFees(admin: SupabaseClient, orgId: 
   // Load SumUp transactions with fees
   const { data: transactions, error } = await admin
     .from('sumup_transactions')
-    .select('id, timestamp_utc, amount_net, fee')
+    .select('id, timestamp_utc, amount, fee_amount')
     .eq('org_id', orgId)
     .eq('status', 'SUCCESSFUL')
-    .gt('fee', 0)
+    .gt('fee_amount', 0)
 
   if (error) {
     throw error
@@ -106,7 +105,7 @@ export async function populateLedgerFromSumUpFees(admin: SupabaseClient, orgId: 
       org_id: orgId,
       event_date: tx.timestamp_utc?.split('T')[0] || new Date().toISOString().split('T')[0],
       competence_date: tx.timestamp_utc?.split('T')[0],
-      amount: tx.fee || 0,
+      amount: tx.fee_amount || 0,
       direction: 'saida',
       nature: 'SUMUP_FEE_COST',
       source: 'sumup',
@@ -115,7 +114,7 @@ export async function populateLedgerFromSumUpFees(admin: SupabaseClient, orgId: 
       description: 'SumUp processing fee',
       metadata: {
         transaction_id: tx.id,
-        transaction_amount_net: tx.amount_net,
+        transaction_amount: tx.amount,
       },
     })
   }

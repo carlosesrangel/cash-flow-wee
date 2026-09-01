@@ -19,12 +19,13 @@ function KPITile({ label, value, emoji }: { label: string; value: string | numbe
 
 export function SalesSummaryCard({ summary }: Props) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-      <KPITile label="Receita Anual" value={formatBRL(summary.totalRevenue)} emoji="📊" />
-      <KPITile label="Receita (Mês)" value={formatBRL(summary.monthlyRevenue)} emoji="📈" />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <KPITile label="Vendas" value={formatBRL(summary.totalRevenue)} emoji="📊" />
+      <KPITile label="Peças" value={summary.pieces} emoji="📦" />
+      <KPITile label="Preço médio" value={formatBRL(summary.averagePrice)} emoji="🏷️" />
       <KPITile label="Ticket Médio" value={formatBRL(summary.averageOrderValue)} emoji="💰" />
-      <KPITile label="Faturas (Mês)" value={summary.invoicesThisMonth} emoji="📄" />
-      <KPITile label="Clientes Top" value={summary.topCustomersCount} emoji="👥" />
+      <KPITile label="Peças por atendimento" value={summary.piecesPerOrder.toFixed(2)} emoji="🧾" />
+      <KPITile label="Clientes" value={summary.clients} emoji="👥" />
     </div>
   )
 }

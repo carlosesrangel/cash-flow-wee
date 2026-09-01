@@ -113,7 +113,7 @@ export default function VendasPage() {
           </CardContent>
         </Card>
       ) : (
-        <SalesSummaryCard summary={data?.summary || { totalRevenue: 0, totalOrders: 0 }} />
+        <SalesSummaryCard summary={data.summary} />
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">

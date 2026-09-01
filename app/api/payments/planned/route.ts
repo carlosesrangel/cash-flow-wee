@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getCurrentMember } from '@/lib/auth/session'
-import { loadPlannedPayments, savePlannedPayment, deletePlannedPayment } from '@/lib/payments/engine'
+import { loadPayableCandidates, loadPlannedPayments, savePlannedPayment, savePlannedPayments, deletePlannedPayment } from '@/lib/payments/engine'
 
 const querySchema = z.object({ orgId: z.string().uuid() })
-const bodySchema = z.object({ apId: z.string().uuid(), plannedDate: z.string().date() })
+const paymentSchema = z.object({ apId: z.string().uuid(), plannedDate: z.string().date() })
+const bodySchema = z.union([paymentSchema, z.object({ payments: z.array(paymentSchema).min(1) })])
 
 export async function GET(req: NextRequest) {
   const member = await getCurrentMember()
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const payments = await loadPlannedPayments(member.orgId)
-    return NextResponse.json({ payments })
+    const [payments, candidates] = await Promise.all([loadPlannedPayments(member.orgId), loadPayableCandidates(member.orgId)])
+    return NextResponse.json({ payments, candidates })
   } catch (error) {
       // Error suppressed
     return NextResponse.json({ error: 'Failed to load payments' }, { status: 500 })
@@ -27,7 +28,11 @@ export async function POST(req: NextRequest) {
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 })
 
   try {
-    await savePlannedPayment(member.orgId, body.data.apId, body.data.plannedDate, member.profileId)
+    if ('payments' in body.data) {
+      await savePlannedPayments(member.orgId, body.data.payments, member.profileId)
+    } else {
+      await savePlannedPayment(member.orgId, body.data.apId, body.data.plannedDate, member.profileId)
+    }
     return NextResponse.json({ ok: true })
   } catch (error) {
       // Error suppressed

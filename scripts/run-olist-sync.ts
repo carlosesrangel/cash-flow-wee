@@ -77,7 +77,6 @@ async function main() {
       .from('sync_runs')
       .select('id')
       .eq('org_id', conn.org_id)
-      .eq('integration', 'olist')
       .eq('status', 'running')
       .gte('started_at', cutoff)
       .limit(1)

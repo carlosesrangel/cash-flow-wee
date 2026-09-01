@@ -27,7 +27,6 @@ async function hasActiveSyncRun(orgId: string): Promise<boolean> {
     .from('sync_runs')
     .select('id')
     .eq('org_id', orgId)
-    .eq('integration', 'sumup')
     .eq('status', 'running')
     .gte('started_at', cutoff)
     .limit(1)

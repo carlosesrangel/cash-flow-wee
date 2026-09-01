@@ -7,13 +7,13 @@ export type ClassifiedEntry =
 /**
  * The only `situacao` values confirmed against the real WEE Olist data as of
  * this phase (see docs/superpowers/specs/2026-08-15-fase5-cashflow-design.md,
- * "Evidência real usada nesta design"): `aberto` and `pago`. `cancelado` is
- * kept per Prompt Mestre seção 8 despite never having been observed — if a
+ * "Evidência real usada nesta design"): `aberto` and `pago`. Both
+ * `cancelado` and the Olist API's `cancelada` spelling are kept — if a
  * different value ever comes back from Olist, it falls into
  * `situacao_desconhecida` below rather than being silently treated as
  * `aberto`.
  */
-const KNOWN_SITUACOES = ['aberto', 'pago', 'cancelado']
+const KNOWN_SITUACOES = ['aberto', 'pago', 'cancelado', 'cancelada']
 
 export type AccountsReceivableInput = {
   valor: number | null
@@ -37,7 +37,7 @@ export function classifyAccountsReceivable(
   ar: AccountsReceivableInput,
   reconciledCashDate: string | null
 ): ClassifiedEntry {
-  if (ar.situacao === 'cancelado') return { included: false, reason: 'cancelado' }
+  if (ar.situacao === 'cancelado' || ar.situacao === 'cancelada') return { included: false, reason: 'cancelado' }
   if (!ar.situacao || !KNOWN_SITUACOES.includes(ar.situacao)) {
     return { included: false, reason: 'situacao_desconhecida' }
   }
@@ -65,7 +65,7 @@ export type AccountsPayableInput = {
  * "Riscos e suposições", not a fabricated fact.
  */
 export function classifyAccountsPayable(ap: AccountsPayableInput): ClassifiedEntry {
-  if (ap.situacao === 'cancelado') return { included: false, reason: 'cancelado' }
+  if (ap.situacao === 'cancelado' || ap.situacao === 'cancelada') return { included: false, reason: 'cancelado' }
   if (!ap.situacao || !KNOWN_SITUACOES.includes(ap.situacao)) {
     return { included: false, reason: 'situacao_desconhecida' }
   }

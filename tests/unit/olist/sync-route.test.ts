@@ -24,7 +24,7 @@ function makeAdminMock(results: Array<Record<string, unknown> | null>) {
     const limit = vi.fn().mockReturnValue({ maybeSingle })
     const gte = vi.fn().mockReturnValue({ limit })
     const eq3 = vi.fn().mockReturnValue({ limit, gte })
-    const eq2 = vi.fn().mockReturnValue({ eq: eq3 })
+    const eq2 = vi.fn().mockReturnValue({ eq: eq3, gte })
     const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
     const select = vi.fn().mockReturnValue({ eq: eq1 })
     return { select, eq1, eq2, eq3, limit, gte, maybeSingle }

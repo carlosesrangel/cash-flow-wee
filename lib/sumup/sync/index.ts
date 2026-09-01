@@ -3,6 +3,7 @@ import { syncSumupTransactions } from '@/lib/sumup/sync/transactions'
 import { syncSumupPayouts } from '@/lib/sumup/sync/payouts'
 import { receivedBeforeFailure } from '@/lib/sumup/sync/errors'
 import { runReconciliation } from '@/lib/reconciliation'
+import { refreshDerivedFinancialData } from '@/lib/sync/derived-refresh'
 
 type LegOutcome = { received: number; error: Error | null }
 
@@ -44,6 +45,7 @@ export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental
   if (errors.length === 0) {
     try {
       await runReconciliation(orgId)
+      await refreshDerivedFinancialData(orgId)
     } catch (error) {
       await finishSyncRun(runId, {
         status: 'failed',

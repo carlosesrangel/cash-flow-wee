@@ -15,31 +15,27 @@ interface DateRangeFilterProps {
   loading?: boolean
 }
 
-const PRESET_RANGES = [
-  { label: 'Últimos 7 dias', days: 7 },
-  { label: 'Últimos 30 dias', days: 30 },
-  { label: 'Últimos 90 dias', days: 90 },
-  { label: 'Últimos 6 meses', days: 180 },
-  { label: 'Último ano', days: 365 },
-]
+const PRESET_RANGES = ['Ontem', 'Essa semana', 'Esse mês', 'Esse ano', 'Ano anterior'] as const
 
 export function DateRangeFilter({ onRangeChange, loading }: DateRangeFilterProps) {
-  const [selectedRange, setSelectedRange] = useState<number>(90)
+  const [selectedRange, setSelectedRange] = useState<string>('Esse mês')
   const [customMode, setCustomMode] = useState(false)
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
 
-  const applyPreset = (days: number) => {
-    setSelectedRange(days)
+  const applyPreset = (preset: typeof PRESET_RANGES[number]) => {
+    setSelectedRange(preset)
     setCustomMode(false)
-    const end = new Date()
-    const start = new Date()
-    start.setDate(start.getDate() - days)
-    onRangeChange({
-      startDate: start,
-      endDate: end,
-      days,
-    })
+    const today = new Date()
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    let start = new Date(end)
+    let rangeEnd = new Date(end)
+    if (preset === 'Ontem') { start.setDate(start.getDate() - 1); rangeEnd = new Date(start) }
+    if (preset === 'Essa semana') { const day = start.getDay(); const mondayOffset = day === 0 ? 6 : day - 1; start.setDate(start.getDate() - mondayOffset) }
+    if (preset === 'Esse mês') start = new Date(end.getFullYear(), end.getMonth(), 1)
+    if (preset === 'Esse ano') start = new Date(end.getFullYear(), 0, 1)
+    if (preset === 'Ano anterior') { start = new Date(end.getFullYear() - 1, 0, 1); rangeEnd = new Date(end.getFullYear() - 1, 11, 31) }
+    onRangeChange({ startDate: start, endDate: rangeEnd, days: Math.ceil((rangeEnd.getTime() - start.getTime()) / 86400000) + 1 })
   }
 
   const applyCustomRange = () => {
@@ -56,7 +52,7 @@ export function DateRangeFilter({ onRangeChange, loading }: DateRangeFilterProps
       return
     }
 
-    setSelectedRange(-1)
+    setSelectedRange('custom')
     onRangeChange({
       startDate: start,
       endDate: end,
@@ -73,14 +69,14 @@ export function DateRangeFilter({ onRangeChange, loading }: DateRangeFilterProps
             <div className="flex flex-wrap gap-2">
               {PRESET_RANGES.map((preset) => (
                 <Button
-                  key={preset.days}
-                  onClick={() => applyPreset(preset.days)}
-                  variant={selectedRange === preset.days && !customMode ? 'default' : 'outline'}
+                  key={preset}
+                  onClick={() => applyPreset(preset)}
+                  variant={selectedRange === preset && !customMode ? 'default' : 'outline'}
                   size="sm"
                   disabled={loading}
                   className="text-xs"
                 >
-                  {preset.label}
+                  {preset}
                 </Button>
               ))}
             </div>

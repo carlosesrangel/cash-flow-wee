@@ -12,6 +12,7 @@ vi.mock('@/lib/olist/sync/run-context', () => ({
   finishSyncRun: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/lib/reconciliation', () => ({ runReconciliation: vi.fn().mockResolvedValue({ processed: 0 }) }))
+vi.mock('@/lib/sync/derived-refresh', () => ({ refreshDerivedFinancialData: vi.fn().mockResolvedValue({ analytics: [], ledger: { success: true } }) }))
 
 import { syncContacts } from '@/lib/olist/sync/contacts'
 import { syncOrders } from '@/lib/olist/sync/orders'

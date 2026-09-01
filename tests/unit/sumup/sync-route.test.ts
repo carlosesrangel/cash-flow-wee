@@ -32,7 +32,7 @@ function mockSyncRunsQuery(options: { activeRun?: unknown; priorSuccess?: unknow
     maybeSingle: priorSuccessMaybeSingle,
     gte,
   })
-  const eq2 = vi.fn().mockReturnValue({ eq: eq3 })
+  const eq2 = vi.fn().mockReturnValue({ eq: eq3, gte })
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
   const select = vi.fn().mockReturnValue({ eq: eq1 })
   return { from: vi.fn().mockReturnValue({ select }) }

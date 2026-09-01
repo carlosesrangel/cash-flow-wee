@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
           .from('sync_runs')
           .select('id')
           .eq('org_id', conn.org_id)
-          .eq('integration', 'olist')
           .eq('status', 'running')
           .gte('started_at', new Date(Date.now() - 10*60*1000).toISOString())  // 10 min
           .limit(1)

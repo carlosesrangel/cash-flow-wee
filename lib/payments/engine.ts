@@ -2,6 +2,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/reconciliation/run'
 import { applyScenarioToPayment } from '@/lib/payments/scenarios'
 import type { PaymentAdjustment, PlannedPaymentValue, AdjustedPayment } from '@/lib/payments/scenarios'
+import { classifyPayableStatus, type PayableStatusResult } from '@/lib/payables/classify-status'
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
@@ -10,6 +11,16 @@ export type PlannedPayment = {
   plannedDate: string
   createdBy: string | null
   createdAt: string
+}
+
+export type PayableCandidate = {
+  apId: string
+  fornecedorNome: string | null
+  categoria: string | null
+  dataVencimento: string | null
+  saldo: number
+  plannedDate: string | null
+  payableStatus: PayableStatusResult
 }
 
 export type PaymentScenario = {
@@ -61,6 +72,38 @@ export async function loadPlannedPayments(orgId: string): Promise<PlannedPayment
     'Failed to load planned_payments'
   )
   return rows.map((r) => ({ apId: r.ap_id, plannedDate: r.planned_date, createdBy: r.created_by, createdAt: r.created_at }))
+}
+
+/** Load only outstanding payables that can be selected for payment planning. */
+export async function loadPayableCandidates(orgId: string): Promise<PayableCandidate[]> {
+  const admin = createAdminSupabaseClient()
+  const [{ data: rows, error }, { data: contacts, error: contactsError }, { data: planned, error: plannedError }] = await Promise.all([
+    admin.from('olist_accounts_payable').select('id, fornecedor_olist_id, categoria, data_vencimento, saldo, valor, situacao, data_liquidacao').eq('org_id', orgId).order('data_vencimento', { ascending: true }),
+    admin.from('olist_contacts').select('olist_id, nome').eq('org_id', orgId),
+    admin.from('planned_payments').select('ap_id, planned_date').eq('org_id', orgId),
+  ])
+  if (error) throw new Error(`Failed to load payable candidates: ${error.message}`)
+  if (contactsError) throw new Error(`Failed to load payable suppliers: ${contactsError.message}`)
+  if (plannedError) throw new Error(`Failed to load planned dates: ${plannedError.message}`)
+
+  const contactNames = new Map((contacts ?? []).map((contact) => [contact.olist_id as number, contact.nome as string | null]))
+  const plannedDates = new Map((planned ?? []).map((payment) => [payment.ap_id as string, payment.planned_date as string]))
+
+  return (rows ?? []).flatMap((row) => {
+    const status = classifyPayableStatus(row.situacao, row.saldo, row.valor, row.data_vencimento, row.data_liquidacao)
+    const parsedBalance = Number(row.saldo)
+    const balance = row.saldo !== null && row.saldo !== undefined && Number.isFinite(parsedBalance) ? parsedBalance : null
+    if (balance === null || balance <= 0 || status.status === 'paid' || status.status === 'cancelled') return []
+    return [{
+      apId: row.id as string,
+      fornecedorNome: row.fornecedor_olist_id ? contactNames.get(row.fornecedor_olist_id as number) ?? null : null,
+      categoria: row.categoria as string | null,
+      dataVencimento: row.data_vencimento as string | null,
+      saldo: balance,
+      plannedDate: plannedDates.get(row.id as string) ?? row.data_vencimento as string | null,
+      payableStatus: status,
+    }]
+  })
 }
 
 /**
@@ -130,6 +173,16 @@ export async function savePlannedPayment(orgId: string, apId: string, plannedDat
     { onConflict: 'org_id,ap_id' }
   )
   if (error) throw new Error(`Failed to save planned_payment: ${error.message}`)
+}
+
+export async function savePlannedPayments(orgId: string, payments: Array<{ apId: string; plannedDate: string }>, actorProfileId: string): Promise<void> {
+  if (payments.length === 0) return
+  const admin = createAdminSupabaseClient()
+  const { error } = await admin.from('planned_payments').upsert(
+    payments.map((payment) => ({ org_id: orgId, ap_id: payment.apId, planned_date: payment.plannedDate, created_by: actorProfileId })),
+    { onConflict: 'org_id,ap_id' }
+  )
+  if (error) throw new Error(`Failed to save planned_payments: ${error.message}`)
 }
 
 /**

@@ -182,7 +182,8 @@ export async function lookupFeeRate(
  * Tiers:
  * 1. Exact match (5D) if available and valid
  * 2. payment_type + nro_parcelas aggregation
- * 3. No match: taxa = 0 (fallback)
+ * 3. No match: taxa = null (the source is unavailable; callers may choose a
+ * conservative projection policy, but must keep the missing-source status).
  */
 export async function lookupProjectedSaleFeeRate(
   admin: SupabaseClient,
@@ -192,7 +193,7 @@ export async function lookupProjectedSaleFeeRate(
   nro_parcelas: number,
   entry_mode: string,
   payout_plan: string
-): Promise<{ taxa: number; source: 'COMBINACAO_EXATA' | 'MODALIDADE_E_PARCELAS' | 'SEM_TAXA_HISTORICA' }> {
+): Promise<{ taxa: number | null; source: 'COMBINACAO_EXATA' | 'MODALIDADE_E_PARCELAS' | 'SEM_TAXA_HISTORICA' }> {
   // Tier 1: Exact Match (5D)
   const tier1 = await admin
     .from('sumup_fee_rates_12m')
@@ -238,9 +239,10 @@ export async function lookupProjectedSaleFeeRate(
     }
   }
 
-  // No match: return 0
+  // No match is not evidence of a zero fee. Keep the value unknown so the
+  // forecast can expose FEE_VALUE_PARITY as blocked by source data.
   return {
-    taxa: 0,
+    taxa: null,
     source: 'SEM_TAXA_HISTORICA',
   }
 }
