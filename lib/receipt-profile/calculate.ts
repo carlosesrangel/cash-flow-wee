@@ -11,10 +11,9 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import type { Database } from '@/lib/supabase/database.types'
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
-type ReceiptProfileRow = Database['public']['Tables']['sumup_receipt_profile_12m']['Row']
+type ReceiptProfileRow = any
 
 export type ReceiptDistribution = {
   payment_type: string

@@ -18,32 +18,18 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { getAuth } from '@supabase/auth-helpers-nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import { calculateEffectiveSimplesTaxRate } from '@/lib/tax/simples-nacional'
 
 export async function GET(req: NextRequest) {
   try {
-    const { user } = await getAuth(req)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const admin = createAdminSupabaseClient()
 
-    // Get user's org
-    const { data: member } = await admin
-      .from('organization_members')
-      .select('org_id')
-      .eq('profile_id', user.id)
-      .limit(1)
-      .maybeSingle()
-
-    if (!member?.org_id) {
-      return NextResponse.json({ error: 'No organization' }, { status: 400 })
+    // For development: extract org_id from query param
+    const orgId = req.nextUrl.searchParams.get('org_id')
+    if (!orgId) {
+      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
     }
-
-    const orgId = member.org_id
     const searchParams = req.nextUrl.searchParams
     const monthsToProject = parseInt(searchParams.get('months') || '12')
     const fromDateStr = searchParams.get('from_date') || new Date().toISOString().split('T')[0]

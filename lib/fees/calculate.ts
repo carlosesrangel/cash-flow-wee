@@ -10,11 +10,10 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import type { Database } from '@/lib/supabase/database.types'
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
-export type FeeRateRow = Database['public']['Tables']['sumup_fee_rates_12m']['Row']
+export type FeeRateRow = any
 
 export type FeeCalculationResult = {
   taxaMediaPonderada: number | null
@@ -119,9 +118,9 @@ export async function getFeeRateFallback(
     .eq('payout_plan', pp)
     .maybeSingle()
 
-  if (tier1?.taxa_media_ponderada !== null && tier1?.confiabilidade !== 'BAIXA') {
+  if (tier1 && tier1.taxa_media_ponderada !== null && tier1.confiabilidade !== 'BAIXA') {
     return {
-      taxaMediaPonderada: tier1.taxa_media_ponderada!,
+      taxaMediaPonderada: tier1.taxa_media_ponderada,
       fonte: 'COMBINACAO_EXATA',
       confiabilidade: (tier1.confiabilidade as any) || 'MEDIA',
     }

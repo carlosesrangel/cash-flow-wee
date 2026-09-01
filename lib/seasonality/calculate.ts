@@ -52,7 +52,7 @@ export function getBandFromDate(day: number): SeasonalityBand {
 /**
  * Get reference day for a band
  */
-export function getReferenceDay(banda: SeasonalityBand): number {
+export function getReferenceDay(banda: SeasonalityBand): 1 | 10 | 20 {
   switch (banda) {
     case 1:
       return 1

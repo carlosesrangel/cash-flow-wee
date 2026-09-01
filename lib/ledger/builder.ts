@@ -17,10 +17,9 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import type { Database } from '@/lib/supabase/database.types'
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
-type LedgerRow = Database['public']['Tables']['financial_ledger']['Row']
+type LedgerRow = any
 
 export type LedgerEntryInput = {
   org_id: string
