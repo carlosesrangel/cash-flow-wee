@@ -275,3 +275,207 @@ export function getSimplesBracketDescription(rbt12: number): string {
 
   return 'Acima de R$ 1.5M (fora do Simples Nacional)'
 }
+
+/**
+ * FINANCIAL MODEL V2: CORRECT SIMPLES CALCULATION
+ *
+ * Formula: (RBT12 * Aliquota Nominal - Parcela a Deduzir) / RBT12
+ *
+ * NOT: simple bracket lookup
+ * BUT: nominal rate - deduction / RBT12
+ *
+ * Example (Faixa 2):
+ * - RBT12 = 300.000
+ * - Aliquota Nominal = 7,3%
+ * - Parcela Deduzir = 5.940
+ * - Aliquota Efetiva = (300.000 * 0.073 - 5.940) / 300.000 = 0.069800 = 6.98%
+ */
+
+type SimplesTableEntry = {
+  limit: number
+  label: string
+  aliquota_nominal: number
+  parcela_deduzir: number
+}
+
+// 2026: Traditional Simples Nacional (before tax reform)
+const SIMPLES_TABLE_2026: SimplesTableEntry[] = [
+  {
+    limit: 180000,
+    label: 'Faixa 1',
+    aliquota_nominal: 0.04,
+    parcela_deduzir: 0,
+  },
+  {
+    limit: 360000,
+    label: 'Faixa 2',
+    aliquota_nominal: 0.073,
+    parcela_deduzir: 5940,
+  },
+  {
+    limit: 720000,
+    label: 'Faixa 3',
+    aliquota_nominal: 0.095,
+    parcela_deduzir: 13860,
+  },
+  {
+    limit: 1800000,
+    label: 'Faixa 4',
+    aliquota_nominal: 0.107,
+    parcela_deduzir: 22500,
+  },
+  {
+    limit: 3600000,
+    label: 'Faixa 5',
+    aliquota_nominal: 0.143,
+    parcela_deduzir: 87300,
+  },
+  {
+    limit: 4800000,
+    label: 'Faixa 6',
+    aliquota_nominal: 0.19,
+    parcela_deduzir: 378000,
+  },
+  {
+    limit: Infinity,
+    label: 'Fora do Simples',
+    aliquota_nominal: 0,
+    parcela_deduzir: 0,
+  },
+]
+
+// 2027: Simples Tradicional (with CBS/IBS added)
+const SIMPLES_TABLE_2027_TRADICIONAL: SimplesTableEntry[] = [
+  {
+    limit: 180000,
+    label: 'Faixa 1',
+    aliquota_nominal: 0.065, // 4% + 2.5% CBS/IBS
+    parcela_deduzir: 0,
+  },
+  {
+    limit: 360000,
+    label: 'Faixa 2',
+    aliquota_nominal: 0.0973,
+    parcela_deduzir: 5940,
+  },
+  {
+    limit: 720000,
+    label: 'Faixa 3',
+    aliquota_nominal: 0.1195,
+    parcela_deduzir: 13860,
+  },
+  {
+    limit: 1800000,
+    label: 'Faixa 4',
+    aliquota_nominal: 0.132,
+    parcela_deduzir: 22500,
+  },
+  {
+    limit: 3600000,
+    label: 'Faixa 5',
+    aliquota_nominal: 0.168,
+    parcela_deduzir: 87300,
+  },
+  {
+    limit: 4800000,
+    label: 'Faixa 6',
+    aliquota_nominal: 0.215,
+    parcela_deduzir: 378000,
+  },
+  {
+    limit: Infinity,
+    label: 'Fora do Simples',
+    aliquota_nominal: 0,
+    parcela_deduzir: 0,
+  },
+]
+
+function getSimplesBracket(rbt12: number, year: number = 2026): SimplesTableEntry {
+  const table = year >= 2027 ? SIMPLES_TABLE_2027_TRADICIONAL : SIMPLES_TABLE_2026
+  for (const entry of table) {
+    if (rbt12 <= entry.limit) {
+      return entry
+    }
+  }
+  return table[table.length - 1]
+}
+
+/**
+ * Calculate effective Simples rate using CORRECT formula
+ * Effective Rate = (RBT12 * Nominal - Deduction) / RBT12
+ */
+export function calculateEffectiveSimplesTaxRate(
+  rbt12: number,
+  year: number = 2026
+): {
+  aliquota_nominal: number
+  parcela_deduzir: number
+  aliquota_efetiva: number
+  faixa: string
+} {
+  if (rbt12 <= 0) {
+    return {
+      aliquota_nominal: 0.04,
+      parcela_deduzir: 0,
+      aliquota_efetiva: 0.04,
+      faixa: 'Faixa 1',
+    }
+  }
+
+  const bracket = getSimplesBracket(rbt12, year)
+
+  if (bracket.aliquota_nominal === 0) {
+    // Fora do Simples Nacional
+    return {
+      aliquota_nominal: 0,
+      parcela_deduzir: 0,
+      aliquota_efetiva: 0,
+      faixa: bracket.label,
+    }
+  }
+
+  const aliquota_efetiva = (rbt12 * bracket.aliquota_nominal - bracket.parcela_deduzir) / rbt12
+
+  return {
+    aliquota_nominal: bracket.aliquota_nominal,
+    parcela_deduzir: bracket.parcela_deduzir,
+    aliquota_efetiva,
+    faixa: bracket.label,
+  }
+}
+
+/**
+ * Project Simples tax for a given competence month
+ *
+ * RBT12 is rolling 12-month window:
+ * For month M in year Y:
+ * RBT12 = SUM(revenue months Y-1 months M to Y month M-1)
+ *
+ * Note: Uses COMPETENCE date, not payment date
+ */
+export function projectSimplesTax(
+  receita_competencia: number,
+  rbt12: number,
+  year: number = 2026
+): {
+  imposto_simples_projetado: number
+  aliquota_efetiva: number
+  rbt12: number
+  faixa: string
+  data_vencimento: Date // 20th of following month
+  competence_month: number
+  competence_year: number
+} {
+  const taxInfo = calculateEffectiveSimplesTaxRate(rbt12, year)
+  const imposto = receita_competencia * taxInfo.aliquota_efetiva
+
+  return {
+    imposto_simples_projetado: Math.round(imposto * 100) / 100, // 2 decimals
+    aliquota_efetiva: taxInfo.aliquota_efetiva,
+    rbt12,
+    faixa: taxInfo.faixa,
+    data_vencimento: new Date(year, 0, 20), // placeholder, should be M+1 month 20th
+    competence_month: 1, // placeholder
+    competence_year: year,
+  }
+}
