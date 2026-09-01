@@ -5,7 +5,6 @@
  * calculates the months-to-receipt distribution (M+0, M+1, M+2, etc).
  *
  * Uses DATE_TRUNC arithmetic: (YEAR * 12 + MONTH) to calculate month difference.
- * NOT dias/30 (wrong approach).
  *
  * Power Query specification: Points 8-10
  */
@@ -21,7 +20,7 @@ export interface ReceiptProfileEntry {
   meses_ate_receber: number
   valor_recebido: number
   qtd_recebimentos: number
-  pct_recebimento_modalidade: number // SUM = 1.0 per modality
+  pct_recebimento_modalidade: number
 }
 
 export interface ReceiptProfileResult {
@@ -47,10 +46,12 @@ export async function calculateReceiptProfile(
   entry_mode: string,
   payout_plan: string
 ): Promise<ReceiptProfileResult> {
-  // Load transactions
+  // Load transactions: type=PAYMENT, status=SUCCESSFUL, amount > 0, transaction_code not null
   const { data: transactions, error: txError } = await admin
     .from('sumup_transactions')
-    .select('id, transaction_code, created_at, payment_type, card_type, installments_count, entry_mode, payout_plan')
+    .select(
+      'id, transaction_code, timestamp_utc, created_at, payment_type, card_type, installments_count, entry_mode, payout_plan, amount'
+    )
     .eq('org_id', orgId)
     .eq('type', 'PAYMENT')
     .eq('status', 'SUCCESSFUL')
@@ -58,28 +59,48 @@ export async function calculateReceiptProfile(
     .eq('card_type', card_type)
     .eq('entry_mode', entry_mode)
     .eq('payout_plan', payout_plan)
-    .gte('installments_count', nro_parcelas)
-    .lte('installments_count', nro_parcelas)
+    .eq('installments_count', nro_parcelas)
+    .gt('amount', 0)
+    .not('transaction_code', 'is', null)
 
   if (txError) throw new Error(`Failed to load transactions: ${txError.message}`)
 
-  // Build map of transaction_code -> created_at for quick lookup
-  const txCreatedAtMap = new Map<string, Date>()
+  // Build map: transaction_code -> (date, nro_parcelas_modelo)
+  const txMap = new Map<
+    string,
+    {
+      saleDate: Date
+      nroParcelas: number
+    }
+  >()
+
   for (const tx of transactions || []) {
-    txCreatedAtMap.set(tx.transaction_code, new Date(tx.created_at))
+    let nroParcelas = tx.installments_count || 1
+    if (!nroParcelas || nroParcelas <= 0) {
+      nroParcelas = 1
+    }
+
+    txMap.set(tx.transaction_code, {
+      saleDate: new Date(tx.timestamp_utc || tx.created_at),
+      nroParcelas,
+    })
   }
 
-  // Load payouts
+  // Load payouts: status=SUCCESSFUL or NULL, type=PAYOUT or NULL, amount not null, date not null
   const { data: payouts, error: payoutError } = await admin
     .from('sumup_payouts')
-    .select('transaction_code, amount, date, status')
+    .select('transaction_code, amount, date, status, type')
     .eq('org_id', orgId)
-    .eq('type', 'PAYOUT')
-    .in('status', ['SUCCESSFUL'])
     .not('transaction_code', 'is', null)
     .not('date', 'is', null)
+    .not('amount', 'is', null)
 
   if (payoutError) throw new Error(`Failed to load payouts: ${payoutError.message}`)
+
+  // Filter payouts: (status = SUCCESSFUL OR NULL) AND (type = PAYOUT OR NULL)
+  const validPayouts = (payouts || []).filter(
+    (p) => (!p.status || p.status === 'SUCCESSFUL') && (!p.type || p.type === 'PAYOUT')
+  )
 
   // Group by months-to-receipt
   const receiptsMap = new Map<
@@ -92,26 +113,26 @@ export async function calculateReceiptProfile(
 
   let totalPayoutsCount = 0
 
-  for (const payout of payouts || []) {
-    const txCreatedAt = txCreatedAtMap.get(payout.transaction_code)
-    if (!txCreatedAt) continue
+  for (const payout of validPayouts) {
+    const txData = txMap.get(payout.transaction_code)
+    if (!txData) continue
 
     totalPayoutsCount += 1
 
-    // Calculate month difference using DATE_TRUNC arithmetic
-    const txDate = new Date(txCreatedAt)
+    // Calculate month difference using (YEAR * 12 + MONTH) arithmetic
+    const saleDate = txData.saleDate
     const payoutDate = new Date(payout.date)
 
-    const txYear = txDate.getFullYear()
-    const txMonth = txDate.getMonth() + 1
+    const saleYear = saleDate.getFullYear()
+    const saleMonth = saleDate.getMonth() + 1
     const payoutYear = payoutDate.getFullYear()
     const payoutMonth = payoutDate.getMonth() + 1
 
-    const mesesAteReceber = payoutYear * 12 + payoutMonth - (txYear * 12 + txMonth)
-    const clampedMeses = Math.max(0, mesesAteReceber) // Shouldn't be negative, but clamp just in case
+    const mesesAteReceber = payoutYear * 12 + payoutMonth - (saleYear * 12 + saleMonth)
+    const clampedMeses = Math.max(0, mesesAteReceber)
 
     const existing = receiptsMap.get(clampedMeses) || { valor: 0, count: 0 }
-    existing.valor += Math.abs(payout.amount || 0)
+    existing.valor += payout.amount || 0
     existing.count += 1
     receiptsMap.set(clampedMeses, existing)
   }
@@ -160,20 +181,25 @@ export async function calculateReceiptProfile(
  */
 export function validateReceiptProfileInvariants(result: ReceiptProfileResult): boolean {
   const sum = result.distributions.reduce((total, d) => total + d.pct_recebimento_modalidade, 0)
-  return Math.abs(sum - 1.0) < 0.0001 // allow floating point error
+  return Math.abs(sum - 1.0) < 0.0001
 }
 
 /**
  * Project payment receipt for a transaction
- * Given sale month and modality, return expected receipt distribution
+ * Given sale amount, sale date, and receipt profile, return distribution across months
+ *
+ * @param saleAmount sale revenue (before fees)
+ * @param saleYearMonth sale date in 'YYYY-MM' format
+ * @param receiptProfile receipt timing distribution for the modality
  */
 export function projectPaymentReceipt(
   saleAmount: number,
-  saleYearMonth: string, // 'YYYY-MM'
+  saleYearMonth: string,
   receiptProfile: ReceiptProfileResult
 ): Array<{
   year: number
   month: number
+  day: number // band day (1, 10, 20)
   expected_amount: number
   pct: number
 }> {
@@ -190,10 +216,19 @@ export function projectPaymentReceipt(
       finalMonth = ((finalMonth - 1) % 12) + 1
     }
 
+    // Determine band day based on band order
+    const bandIndex = receiptProfile.distributions.indexOf(dist)
+    let bandDay = 1
+    if (bandIndex === 1) bandDay = 10
+    else if (bandIndex === 2) bandDay = 20
+    // For any others, cycle
+    else if (bandIndex > 2) bandDay = 1 + ((bandIndex % 3) * 10)
+
     return {
       year: receiptYear,
       month: finalMonth,
-      expected_amount: saleAmount * dist.pct_recebimento_modalidade,
+      day: Math.min(bandDay, 28), // clamp to valid day
+      expected_amount: Math.round(saleAmount * dist.pct_recebimento_modalidade * 100) / 100, // 2 decimals
       pct: dist.pct_recebimento_modalidade,
     }
   })

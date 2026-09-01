@@ -2,129 +2,184 @@
  * Forecast Pipeline: End-to-End Integration
  *
  * Orchestrates the complete forecast calculation:
- * 1. Load base forecast (revenue projection)
- * 2. Apply Sazonalidade (3-band decomposition)
- * 3. Apply Receipt Profile (payment timing)
- * 4. Apply Fee Fallback (expected fee rates)
- * 5. Generate projection events
+ * 1. Input: Monthly forecast (year, month, revenue)
+ * 2. Seasonality: Decompose into 3 bands (days 1-9, 10-19, 20-31)
+ * 3. Payment Mix: Distribute each band across modalities
+ * 4. Fee Lookup: Calculate fee rate per modality
+ * 5. Receipt Profile: Calculate months-to-receipt distribution
+ * 6. Dates: Create sale_date and receipt_date
+ * 7. Gross/Fee/Net: Final calculations
+ * 8. Aggregation: Group by receipt date
  *
- * Power Query specification: Points 5-7, 11-13
+ * Power Query specification: Full pipeline
  */
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { calculateSeasonality3Bands, distributeBySeasonality } from './seasonality'
+import { calculatePaymentMix, distributeAcrossModalities } from './payment_mix'
 import { calculateReceiptProfile, projectPaymentReceipt } from './receipt_profile'
-import { lookupFeeRate } from '@/lib/analytics/fee_fallback'
+import { lookupProjectedSaleFeeRate } from '@/lib/analytics/fee_fallback'
 
 export interface ForecastEntry {
-  month: number
   year: number
+  month: number
+  sale_date: Date // actual sale date based on band
   payment_type: string
   card_type: string
   nro_parcelas: number
   entry_mode: string
   payout_plan: string
-  base_amount: number // forecast revenue for this modality+month
-  with_seasonality_band: number // which band (1-3)
-  amount_band: number // revenue distributed to this band
-  receipt_month: number // when payment expected
+  banda: number // seasonality band 1-3
+  amount_venda_modalidade: number // sale amount for this modality+band
+  taxa_venda: number | null // fee rate
+  fee_venda: number // fee on sale
+  receipt_month: number
   receipt_year: number
-  receipt_amount: number // amount expected to receive
-  expected_fee_rate: number | null
-  expected_fee_amount: number | null
-  confiabilidade_fee: 'ALTA' | 'MEDIA' | 'BAIXA'
-  confiabilidade_receipt: 'ALTA' | 'MEDIA' | 'BAIXA'
+  receipt_day: number // specific day
+  receipt_date: Date
+  amount_recebimento: number // gross receipt
+  fee_recebimento: number // fee portion of receipt
+  amount_liquido_recebimento: number // net receipt
+  confiabilidade_seasonality: string
+  confiabilidade_mix: string
+  confiabilidade_fee: string
+  confiabilidade_receipt: string
+}
+
+interface BandData {
+  band: number
+  day: number
+  amount: number
 }
 
 /**
  * Generate forecast entries for a month
- * Given base forecast, distributes through sazonalidade and receipt profile
+ * Input: year, month, base revenue (no pre-split)
  */
 export async function generateMonthlyForecast(
   admin: SupabaseClient,
   orgId: string,
   year: number,
   month: number,
-  baseForecastByModality: Array<{
-    payment_type: string
-    card_type: string
-    nro_parcelas: number
-    entry_mode: string
-    payout_plan: string
-    amount: number
-  }>
+  baseRevenue: number
 ): Promise<ForecastEntry[]> {
   const entries: ForecastEntry[] = []
 
-  for (const modality of baseForecastByModality) {
-    // Step 1: Get seasonality for this month
-    const seasonality = await calculateSeasonality3Bands(admin, orgId, year, month)
+  // Step 1: Get seasonality
+  const seasonality = await calculateSeasonality3Bands(admin, orgId, year, month)
+  if (!seasonality || seasonality.receita_mes === undefined) {
+    return [] // no seasonality data
+  }
 
-    if (!seasonality) continue
+  // Step 2: Distribute across bands
+  const [band1Amount, band2Amount, band3Amount] = distributeBySeasonality(baseRevenue, seasonality)
 
-    const [band1Amount, band2Amount, band3Amount] = distributeBySeasonality(
-      modality.amount,
-      seasonality
-    )
+  const bands: BandData[] = [
+    { band: 1, day: 1, amount: band1Amount },
+    { band: 2, day: 10, amount: band2Amount },
+    { band: 3, day: 20, amount: band3Amount },
+  ]
 
-    // Step 2: Get receipt profile for this modality
-    const receiptProfile = await calculateReceiptProfile(
-      admin,
-      orgId,
-      modality.payment_type,
-      modality.card_type,
-      modality.nro_parcelas,
-      modality.entry_mode,
-      modality.payout_plan
-    )
+  // Step 3: Get payment mix
+  const mix = await calculatePaymentMix(admin, orgId)
+  if (!mix || mix.modalities.length === 0) {
+    return [] // no modality data
+  }
 
-    if (!receiptProfile) continue
+  // Step 4: For each band, distribute across modalities
+  for (const bandData of bands) {
+    if (bandData.amount <= 0) continue
 
-    // Step 3: Get fee rate for this modality
-    const feeResult = await lookupFeeRate(
-      admin,
-      orgId,
-      modality.payment_type,
-      modality.card_type,
-      modality.nro_parcelas,
-      modality.entry_mode,
-      modality.payout_plan
-    )
+    const distributed = distributeAcrossModalities(bandData.amount, mix)
 
-    // Step 4: Project each band
-    const bands = [
-      { amount: band1Amount, band: 1 },
-      { amount: band2Amount, band: 2 },
-      { amount: band3Amount, band: 3 },
-    ]
+    for (const modality of distributed) {
+      if (modality.amount <= 0) continue
 
-    for (const { amount, band } of bands) {
-      if (amount <= 0) continue
+      // Step 5: Get receipt profile for this modality
+      const receiptProfile = await calculateReceiptProfile(
+        admin,
+        orgId,
+        modality.payment_type,
+        modality.card_type,
+        modality.nro_parcelas,
+        modality.entry_mode,
+        modality.payout_plan
+      )
 
-      // Project payment receipt for this band amount
-      const receipt = projectPaymentReceipt(`${year}-${String(month).padStart(2, '0')}`, receiptProfile)
+      // Step 6: Get fee rate
+      const feeResult = await lookupProjectedSaleFeeRate(
+        admin,
+        orgId,
+        modality.payment_type,
+        modality.card_type,
+        modality.nro_parcelas,
+        modality.entry_mode,
+        modality.payout_plan
+      )
 
-      for (const receiptDist of receipt) {
-        const expectedFeeAmount = amount * (feeResult.taxa || 0)
+      // Step 7: Create sale date based on band
+      const saleDateObj = new Date(year, month - 1, bandData.day)
+      const yearMonthStr = `${year}-${String(month).padStart(2, '0')}`
+
+      // Step 8: Calculate fee on sale
+      const feeAmount = Math.round(modality.amount * (feeResult.taxa || 0) * 100) / 100
+
+      // Step 9: Project receipts
+      let receiptsProjected: Array<{
+        year: number
+        month: number
+        day: number
+        expected_amount: number
+        pct: number
+      }> = []
+
+      if (receiptProfile && receiptProfile.distributions.length > 0) {
+        receiptsProjected = projectPaymentReceipt(modality.amount, yearMonthStr, receiptProfile)
+      } else {
+        // Fallback: same month, 100%
+        receiptsProjected = [
+          {
+            year,
+            month,
+            day: bandData.day,
+            expected_amount: modality.amount,
+            pct: 1.0,
+          },
+        ]
+      }
+
+      // Step 10: For each receipt, create forecast entry
+      for (const receipt of receiptsProjected) {
+        // Fee portion of this receipt (proportional)
+        const feeReceipt = Math.round(feeAmount * receipt.pct * 100) / 100
+        const netReceipt = Math.round((receipt.expected_amount - feeReceipt) * 100) / 100
+
+        const receiptDateObj = new Date(receipt.year, receipt.month - 1, receipt.day)
 
         entries.push({
-          month,
           year,
+          month,
+          sale_date: saleDateObj,
           payment_type: modality.payment_type,
           card_type: modality.card_type,
           nro_parcelas: modality.nro_parcelas,
           entry_mode: modality.entry_mode,
           payout_plan: modality.payout_plan,
-          base_amount: modality.amount,
-          with_seasonality_band: band,
-          amount_band: amount,
-          receipt_month: receiptDist.month,
-          receipt_year: receiptDist.year,
-          receipt_amount: receiptDist.expected_amount,
-          expected_fee_rate: feeResult.taxa,
-          expected_fee_amount: expectedFeeAmount,
-          confiabilidade_fee: feeResult.confiabilidade,
-          confiabilidade_receipt: receiptProfile.confiabilidade,
+          banda: bandData.band,
+          amount_venda_modalidade: modality.amount,
+          taxa_venda: feeResult.taxa,
+          fee_venda: feeAmount,
+          receipt_month: receipt.month,
+          receipt_year: receipt.year,
+          receipt_day: receipt.day,
+          receipt_date: receiptDateObj,
+          amount_recebimento: Math.round(receipt.expected_amount * 100) / 100,
+          fee_recebimento: feeReceipt,
+          amount_liquido_recebimento: netReceipt,
+          confiabilidade_seasonality: seasonality.fallback_used,
+          confiabilidade_mix: 'mix', // placeholder
+          confiabilidade_fee: feeResult.source,
+          confiabilidade_receipt: receiptProfile?.confiabilidade || 'BAIXA',
         })
       }
     }
@@ -135,13 +190,13 @@ export async function generateMonthlyForecast(
 
 /**
  * Aggregate forecast entries by receipt date
- * Groups all modalities and bands that should be received on same month
  */
 export function aggregateByReceiptDate(
   entries: ForecastEntry[]
 ): Array<{
   receipt_year: number
   receipt_month: number
+  receipt_day: number
   gross_amount: number
   total_fees: number
   net_amount: number
@@ -155,6 +210,7 @@ export function aggregateByReceiptDate(
       fees: number
       count: number
       confidences: string[]
+      day: number
     }
   >()
 
@@ -165,12 +221,13 @@ export function aggregateByReceiptDate(
       fees: 0,
       count: 0,
       confidences: [],
+      day: entry.receipt_day,
     }
 
-    existing.gross += entry.receipt_amount
-    existing.fees += entry.expected_fee_amount || 0
+    existing.gross += entry.amount_recebimento
+    existing.fees += entry.fee_recebimento
     existing.count += 1
-    existing.confidences.push(entry.confiabilidade_fee)
+    existing.confidences.push(entry.confiabilidade_receipt)
 
     byDate.set(key, existing)
   }
@@ -185,12 +242,17 @@ export function aggregateByReceiptDate(
     const confidenceLabel =
       minConfidence === 3 ? 'ALTA' : minConfidence === 2 ? 'MEDIA' : 'BAIXA'
 
+    const grossRounded = Math.round(data.gross * 100) / 100
+    const feesRounded = Math.round(data.fees * 100) / 100
+    const netRounded = Math.round((grossRounded - feesRounded) * 100) / 100
+
     results.push({
       receipt_year: year,
       receipt_month: month,
-      gross_amount: data.gross,
-      total_fees: data.fees,
-      net_amount: data.gross - data.fees,
+      receipt_day: data.day,
+      gross_amount: grossRounded,
+      total_fees: feesRounded,
+      net_amount: netRounded,
       transaction_count: data.count,
       confidence_min: confidenceLabel,
     })

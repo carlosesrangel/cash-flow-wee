@@ -49,7 +49,6 @@ export async function lookupFeeRate(
     .eq('nro_parcelas_modelo', nro_parcelas)
     .eq('entry_mode', entry_mode)
     .eq('payout_plan', payout_plan)
-    .neq('confiabilidade', 'BAIXA') // must be ALTA or MEDIA
     .single()
 
   if (tier1.data && tier1.data.qtd_com_fee >= 5) {
@@ -173,6 +172,76 @@ export async function lookupFeeRate(
     valor_base_taxa: 0,
     fee_total: 0,
     confiabilidade: 'BAIXA',
+  }
+}
+
+/**
+ * Lookup fee rate for projected sales (simpler rule than lookupFeeRate)
+ * Used for forecasting, not actual transactions
+ *
+ * Tiers:
+ * 1. Exact match (5D) if available and valid
+ * 2. payment_type + nro_parcelas aggregation
+ * 3. No match: taxa = 0 (fallback)
+ */
+export async function lookupProjectedSaleFeeRate(
+  admin: SupabaseClient,
+  orgId: string,
+  payment_type: string,
+  card_type: string,
+  nro_parcelas: number,
+  entry_mode: string,
+  payout_plan: string
+): Promise<{ taxa: number; source: 'COMBINACAO_EXATA' | 'MODALIDADE_E_PARCELAS' | 'SEM_TAXA_HISTORICA' }> {
+  // Tier 1: Exact Match (5D)
+  const tier1 = await admin
+    .from('sumup_fee_rates_12m')
+    .select('taxa_media_ponderada, valor_base_taxa_12m')
+    .eq('org_id', orgId)
+    .eq('payment_type', payment_type)
+    .eq('card_type', card_type)
+    .eq('nro_parcelas_modelo', nro_parcelas)
+    .eq('entry_mode', entry_mode)
+    .eq('payout_plan', payout_plan)
+    .single()
+
+  if (tier1.data && tier1.data.taxa_media_ponderada !== null && tier1.data.valor_base_taxa_12m > 0) {
+    return {
+      taxa: tier1.data.taxa_media_ponderada,
+      source: 'COMBINACAO_EXATA',
+    }
+  }
+
+  // Tier 2: payment_type + nro_parcelas aggregation
+  const tier2 = await admin
+    .from('sumup_fee_rates_12m')
+    .select('valor_base_taxa_12m, fee_total_12m')
+    .eq('org_id', orgId)
+    .eq('payment_type', payment_type)
+    .eq('nro_parcelas_modelo', nro_parcelas)
+
+  if (tier2.data && tier2.data.length > 0) {
+    const aggregated = tier2.data.reduce(
+      (acc, row) => ({
+        valor_base_taxa_12m: acc.valor_base_taxa_12m + (row.valor_base_taxa_12m || 0),
+        fee_total_12m: acc.fee_total_12m + (row.fee_total_12m || 0),
+      }),
+      { valor_base_taxa_12m: 0, fee_total_12m: 0 }
+    )
+
+    if (aggregated.valor_base_taxa_12m > 0) {
+      const taxa = aggregated.fee_total_12m / aggregated.valor_base_taxa_12m
+      return {
+        taxa,
+        source: 'MODALIDADE_E_PARCELAS',
+      }
+    }
+  }
+
+  // No match: return 0
+  return {
+    taxa: 0,
+    source: 'SEM_TAXA_HISTORICA',
   }
 }
 

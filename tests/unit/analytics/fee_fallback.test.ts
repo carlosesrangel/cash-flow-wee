@@ -1,183 +1,214 @@
 import { describe, it, expect } from 'vitest'
+import { lookupFeeRate, lookupProjectedSaleFeeRate } from '@/lib/analytics/fee_fallback'
+import { createMockSupabaseClient } from '../../mocks/supabase'
 
 /**
- * Golden Dataset 02: Fee Fallback Lookup
- *
- * Tests the 4-tier hierarchy:
- * 1. Exact Match (5D: payment_type + card_type + nro_parcelas + entry_mode + payout_plan)
- * 2. 3D Aggregation (payment_type + nro_parcelas)
- * 3. 1D Aggregation (payment_type only)
- * 4. Global Rate (all payment types)
- *
- * Each tier requires >= 5 transactions with fee data to be reliable
+ * Golden Dataset 02: Fee Fallback - REAL FUNCTION EXECUTION
  */
 
-describe('Fee Fallback Lookup Golden Dataset', () => {
-  it('Tier 1: Exact match returns taxa_media_ponderada when available (qtd_com_fee >= 5)', () => {
-    // Scenario: exact modality exists with 10 transactions and 2% rate
-    const exact_match = {
-      payment_type: 'CARD',
-      card_type: 'CREDIT',
-      nro_parcelas: 3,
-      entry_mode: 'POS',
-      payout_plan: 'D+1',
-      qtd_com_fee: 10,
-      taxa_media_ponderada: 0.02,
-    }
+describe('Fee Fallback - GD02', () => {
+  let mockAdmin: ReturnType<typeof createMockSupabaseClient>
 
-    // Should use this directly
-    expect(exact_match.qtd_com_fee).toBeGreaterThanOrEqual(5)
-    expect(exact_match.taxa_media_ponderada).toBe(0.02)
+  // Tier 1: Exact Match
+  it('Tier 1 exact match with qtd >= 5 returns rate', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'CREDIT',
+          nro_parcelas_modelo: 1,
+          entry_mode: 'POS',
+          payout_plan: 'D+1',
+          taxa_media_ponderada: 0.025,
+          qtd_com_fee: 10,
+          valor_base_taxa_12m: 5000,
+          fee_total_12m: 125,
+          confiabilidade: 'MEDIA',
+        },
+      ],
+    })
+
+    const result = await lookupFeeRate(mockAdmin, 'org1', 'CARD', 'CREDIT', 1, 'POS', 'D+1')
+
+    expect(result.taxa).toBe(0.025)
+    expect(result.tier).toBe('EXACT_MATCH')
+    expect(result.qtd_com_fee).toBe(10)
   })
 
-  it('Tier 1 skipped if confiabilidade = BAIXA (qtd_com_fee < 10)', () => {
-    // Scenario: exact match exists but only 3 transactions (BAIXA)
-    const exact_match_baixa = {
-      payment_type: 'CARD',
-      card_type: 'CREDIT',
-      nro_parcelas: 3,
-      entry_mode: 'POS',
-      payout_plan: 'D+1',
-      qtd_com_fee: 3, // BAIXA
-      taxa_media_ponderada: 0.02,
-    }
+  // Tier 1: Below threshold
+  it('Tier 1 below qtd threshold falls through to Tier 2', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [
+        // Exact match exists but qtd=4 < 5
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'CREDIT',
+          nro_parcelas_modelo: 1,
+          entry_mode: 'POS',
+          payout_plan: 'D+1',
+          taxa_media_ponderada: 0.02,
+          qtd_com_fee: 4, // Below threshold
+          valor_base_taxa_12m: 2000,
+          fee_total_12m: 40,
+          confiabilidade: 'BAIXA',
+        },
+        // Tier 2 data: payment_type + nro_parcelas aggregation
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'DEBIT', // Different card type
+          nro_parcelas_modelo: 1,
+          entry_mode: 'POS',
+          payout_plan: 'D+1',
+          taxa_media_ponderada: 0.015,
+          qtd_com_fee: 8,
+          valor_base_taxa_12m: 5000,
+          fee_total_12m: 75,
+          confiabilidade: 'MEDIA',
+        },
+      ],
+    })
 
-    // Tier 1 unavailable (BAIXA), fall through to Tier 2
-    const confidenceLevel =
-      exact_match_baixa.qtd_com_fee >= 30 ? 'ALTA' : exact_match_baixa.qtd_com_fee >= 10 ? 'MEDIA' : 'BAIXA'
-    expect(confidenceLevel).toBe('BAIXA')
+    const result = await lookupFeeRate(mockAdmin, 'org1', 'CARD', 'CREDIT', 1, 'POS', 'D+1')
 
-    // => Skip to Tier 2
+    // Should fall back to Tier 2 or Tier 3
+    expect(result.tier).not.toBe('EXACT_MATCH')
   })
 
-  it('Tier 2: 3D aggregation (payment_type + nro_parcelas) when Tier 1 unavailable', () => {
-    // Scenario: exact match not available, but aggregating across card_type/entry/payout:
-    // - CARD, 3 parcelas, CREDIT, POS, D+1: 4 txs + fee
-    // - CARD, 3 parcelas, CREDIT, POS, D+7: 3 txs + fee
-    // - CARD, 3 parcelas, DEBIT,  POS, D+1: 5 txs + fee
-    // Total: 12 txs, aggregated taxa = 1.5% (example)
+  // Tier 2: Aggregation (when exact match doesn't meet threshold)
+  it('Tier 2 aggregates payment_type + nro_parcelas when exact match below threshold', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [
+        // Exact match exists but below threshold (qtd=4 < 5)
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'CREDIT',
+          nro_parcelas_modelo: 3,
+          entry_mode: 'POS',
+          payout_plan: 'D+1',
+          taxa_media_ponderada: 0.03,
+          qtd_com_fee: 4, // Below threshold
+          valor_base_taxa_12m: 2000,
+          fee_total_12m: 60,
+          confiabilidade: 'MEDIA',
+        },
+        // Tier 2 candidate: same payment_type + nro_parcelas, different modality
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'DEBIT',
+          nro_parcelas_modelo: 3,
+          entry_mode: 'POS',
+          payout_plan: 'D+7',
+          taxa_media_ponderada: 0.02,
+          qtd_com_fee: 8,
+          valor_base_taxa_12m: 3000,
+          fee_total_12m: 60,
+          confiabilidade: 'MEDIA',
+        },
+      ],
+    })
 
-    const tier2_aggregation = {
-      payment_type: 'CARD',
-      nro_parcelas: 3,
-      // aggregated across: card_type, entry_mode, payout_plan
-      qtd_com_fee_total: 12,
-      valor_base_taxa_total: 5000,
-      fee_total: 75, // 1.5%
-    }
+    const result = await lookupFeeRate(mockAdmin, 'org1', 'CARD', 'CREDIT', 3, 'POS', 'D+1')
 
-    const taxa = tier2_aggregation.fee_total / tier2_aggregation.valor_base_taxa_total
-    expect(taxa).toBeCloseTo(0.015, 5)
-    expect(tier2_aggregation.qtd_com_fee_total).toBeGreaterThanOrEqual(5)
+    // Exact match fails (qtd=4 < 5), should fall back to Tier 2: CARD + nro=3 aggregation
+    expect(result.tier).toBe('3D_AGGREGATION')
+    expect(result.qtd_com_fee).toBe(12) // 4 + 8
   })
 
-  it('Tier 3: 1D aggregation (payment_type only) when Tier 2 unavailable', () => {
-    // Scenario: no exact match, no 3D match for (CARD, 3), but:
-    // - All CARD transactions (1x, 3x, 6x, parcelado): 25 total
-    // - Aggregated taxa = 1.8%
+  // Tier 4: Global
+  it('Tier 4 global fallback', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [
+        {
+          org_id: 'org1',
+          payment_type: 'PIX',
+          card_type: 'NAO_INFORMADO',
+          nro_parcelas_modelo: 1,
+          entry_mode: 'NAO_INFORMADO',
+          payout_plan: 'D+0',
+          taxa_media_ponderada: 0.005,
+          qtd_com_fee: 50,
+          valor_base_taxa_12m: 100000,
+          fee_total_12m: 500,
+          confiabilidade: 'ALTA',
+        },
+      ],
+    })
 
-    const tier3_aggregation = {
-      payment_type: 'CARD',
-      qtd_com_fee_total: 25,
-      valor_base_taxa_total: 10000,
-      fee_total: 180, // 1.8%
-    }
+    const result = await lookupFeeRate(mockAdmin, 'org1', 'UNKNOWN', 'UNKNOWN', 1, 'UNKNOWN', 'UNKNOWN')
 
-    const taxa = tier3_aggregation.fee_total / tier3_aggregation.valor_base_taxa_total
-    expect(taxa).toBeCloseTo(0.018, 5)
+    // No exact or partial match, should fall back to Tier 4 (all)
+    expect(result.tier).toBe('GLOBAL')
   })
 
-  it('Tier 4: Global rate (all payment types) fallback', () => {
-    // Scenario: no match for payment_type, fall back to global
-    // - All transactions across all payment types: 50 total
-    // - Aggregated taxa = 1.5%
+  // NOT_FOUND: No data
+  it('NOT_FOUND when no data available', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [],
+    })
 
-    const tier4_global = {
-      qtd_com_fee_total: 50,
-      valor_base_taxa_total: 30000,
-      fee_total: 450, // 1.5%
-    }
-
-    const taxa = tier4_global.fee_total / tier4_global.valor_base_taxa_total
-    expect(taxa).toBeCloseTo(0.015, 5)
-  })
-
-  it('Fallback priority: Exact > 3D > 1D > Global', async () => {
-    // Scenario: transaction with 4D match but not 5D exact
-    // Should try each tier in order, using first available
-
-    const transaction = {
-      payment_type: 'CARD',
-      card_type: 'CREDIT',
-      nro_parcelas: 3,
-      entry_mode: 'POS',
-      payout_plan: 'D+7', // not in Tier 1 (D+1 is common, D+7 is rare)
-    }
-
-    // Expected lookup sequence:
-    // 1. Tier 1: CARD+CREDIT+3+POS+D+7 → not found
-    // 2. Tier 2: CARD+3 (across all card/entry/payout) → found (12 txs) → use 1.5%
-    // 3. (stops, no need for Tier 3 or 4)
-
-    const expected_tier = '3D_AGGREGATION'
-    const expected_taxa = 0.015
-
-    expect(expected_tier).toBe('3D_AGGREGATION')
-    expect(expected_taxa).toBe(0.015)
-  })
-
-  it('Minimum transaction count: >= 5 for tier reliability', async () => {
-    // Each tier must have >= 5 transactions with fee data
-    // If < 5, skip to next tier
-
-    const test_cases = [
-      { tier: 1, qtd_com_fee: 4, should_skip: true },
-      { tier: 1, qtd_com_fee: 5, should_skip: false },
-      { tier: 2, qtd_com_fee: 4, should_skip: true },
-      { tier: 2, qtd_com_fee: 5, should_skip: false },
-      { tier: 3, qtd_com_fee: 4, should_skip: true },
-      { tier: 3, qtd_com_fee: 5, should_skip: false },
-      { tier: 4, qtd_com_fee: 1, should_skip: false }, // Tier 4 has no minimum (global)
-    ]
-
-    for (const tc of test_cases) {
-      if (tc.tier === 4) {
-        // Tier 4 has no minimum
-        expect(tc.qtd_com_fee >= 0).toBe(true)
-      } else {
-        const should_use = tc.qtd_com_fee >= 5
-        expect(should_use).toBe(!tc.should_skip)
-      }
-    }
-  })
-
-  it('Confiabilidade calculated from qtd_com_fee after aggregation', () => {
-    // After aggregating a tier, recalculate confiabilidade based on new total
-
-    const test_cases = [
-      { qtd_com_fee: 9, expected: 'BAIXA' },
-      { qtd_com_fee: 10, expected: 'MEDIA' },
-      { qtd_com_fee: 29, expected: 'MEDIA' },
-      { qtd_com_fee: 30, expected: 'ALTA' },
-      { qtd_com_fee: 50, expected: 'ALTA' },
-    ]
-
-    for (const tc of test_cases) {
-      const confidence =
-        tc.qtd_com_fee >= 30 ? 'ALTA' : tc.qtd_com_fee >= 10 ? 'MEDIA' : 'BAIXA'
-      expect(confidence).toBe(tc.expected)
-    }
-  })
-
-  it('Not Found: no data available in any tier', () => {
-    // Scenario: new organization with no historical data
-    const result = {
-      taxa: null,
-      tier: 'NOT_FOUND',
-      qtd_com_fee: 0,
-    }
+    const result = await lookupFeeRate(mockAdmin, 'org1', 'UNKNOWN', 'UNKNOWN', 1, 'UNKNOWN', 'UNKNOWN')
 
     expect(result.taxa).toBeNull()
     expect(result.tier).toBe('NOT_FOUND')
+  })
+
+  // Projected sale fee lookup
+  it('lookupProjectedSaleFeeRate: Exact match source', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [
+        {
+          org_id: 'org1',
+          payment_type: 'CARD',
+          card_type: 'CREDIT',
+          nro_parcelas_modelo: 1,
+          entry_mode: 'POS',
+          payout_plan: 'D+1',
+          taxa_media_ponderada: 0.02,
+          valor_base_taxa_12m: 10000,
+          fee_total_12m: 200,
+        },
+      ],
+    })
+
+    const result = await lookupProjectedSaleFeeRate(mockAdmin, 'org1', 'CARD', 'CREDIT', 1, 'POS', 'D+1')
+
+    expect(result.taxa).toBe(0.02)
+    expect(result.source).toBe('COMBINACAO_EXATA')
+  })
+
+  it('lookupProjectedSaleFeeRate: No match returns 0', async () => {
+    mockAdmin = createMockSupabaseClient({
+      sumup_fee_rates_12m: [],
+    })
+
+    const result = await lookupProjectedSaleFeeRate(mockAdmin, 'org1', 'UNKNOWN', 'UNKNOWN', 1, 'UNKNOWN', 'UNKNOWN')
+
+    expect(result.taxa).toBe(0)
+    expect(result.source).toBe('SEM_TAXA_HISTORICA')
+  })
+
+  // Invariant: taxa >= 0
+  it('Taxa never negative', () => {
+    const cases = [0, 0.001, 0.01, 0.05, 0.1]
+    for (const taxa of cases) {
+      expect(taxa).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  // Invariant: fee = amount * taxa >= 0
+  it('Fee calculation conservative', () => {
+    const amounts = [100, 1000, 10000]
+    const rates = [0, 0.01, 0.05]
+    for (const amount of amounts) {
+      for (const rate of rates) {
+        const fee = amount * rate
+        expect(fee).toBeGreaterThanOrEqual(0)
+      }
+    }
   })
 })

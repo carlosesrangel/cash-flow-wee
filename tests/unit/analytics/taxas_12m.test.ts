@@ -1,171 +1,193 @@
 import { describe, it, expect } from 'vitest'
-import { calculateTaxas12m, type FeeRateMetrics } from '@/lib/analytics/taxas_12m'
+import { calculateTaxas12m } from '@/lib/analytics/taxas_12m'
+import { createMockSupabaseClient } from '../../mocks/supabase'
 
 /**
  * Golden Dataset 01: Taxas_12M
  *
- * Tests three scenarios from Power Query spec:
- * - Case A: Simple complete sale with single payout
- * - Case B: Installment payment with multiple payouts (each with fee)
- * - Case C: Partial payout (critical test for FeeConsiderado logic)
- *
- * All in same modality to test invariants:
- * - SUM(pct_valor) = 1
- * - SUM(pct_transacoes) = 1
+ * MANDATORY: These tests MUST call calculateTaxas12m() with real mocked data.
+ * NOT permitted: pre-calculating expected values locally and validating own math.
  */
 
-describe('Taxas_12M Golden Dataset', () => {
-  it('Case A: Single complete payout (100 with 2 fee) produces 2% rate', async () => {
-    // Expected values calculated independently
-    // NOT using calculateTaxas12m() to verify
-    const expected = {
-      amount_gross: 100,
-      fee_total: 2,
-      fee_considered: 2, // complete payout
-      taxa_media: 0.02,
-    }
+describe('Taxas_12M - GD01', () => {
+  let mockAdmin: ReturnType<typeof createMockSupabaseClient>
 
-    expect(expected.taxa_media).toBe(expected.fee_total / expected.amount_gross)
-    expect(expected.fee_considered).toBe(expected.fee_total) // no partial payout
-  })
-
-  it('Case B: Three payouts from 300 sale (fees 3+3+3) produces 3% rate', async () => {
-    // 300 split across 3 installments
-    // Each payout: 100 amount, 3 fee
-    // Total: 300 amount, 9 fee
-    const expected = {
-      amount_gross: 300,
-      payout_count: 3,
-      payout_fees: [3, 3, 3],
-      fee_total: 9,
-      fee_considered: 9, // all payouts complete
-      taxa_media: 0.03,
-    }
-
-    const feeSum = expected.payout_fees.reduce((a, b) => a + b, 0)
-    expect(feeSum).toBe(expected.fee_total)
-    expect(expected.taxa_media).toBe(expected.fee_total / expected.amount_gross)
-  })
-
-  it('Case C: Partial payout (600, only 2/6 received) excludes from fee metrics but counts in totals', async () => {
-    // CRITICAL TEST: Transaction with 600 amount
-    // payouts_total = 6
-    // payouts_received = 2 (33% complete)
-    // Observed fees so far: 2 + 2 = 4
-    //
-    // Per Power Query: FeeConsiderado = null because payouts_received < payouts_total
-    //
-    // This transaction MUST:
-    // - Count toward: Qtd Transacoes, Valor Bruto, % Valor, % Transacoes
-    // - NOT count toward: Qtd com Fee, Valor Base Taxa, Fee Total, Taxa Media
-
-    const expected = {
-      amount_gross: 600,
-      payouts_total: 6,
-      payouts_received: 2,
-      fees_observed: 4, // 2 + 2 from two payouts
-      fee_considered: null, // Partial! Exclude from fee metrics
-
-      // Transaction still in totals
-      should_count_qtd: true,
-      should_count_valor: true,
-
-      // But not in fee metrics
-      should_count_qtd_com_fee: false,
-      should_count_valor_base_taxa: false,
-      should_count_fee_total: false,
-    }
-
-    // Verify the rule
-    const feeConsiderado =
-      expected.payouts_received >= expected.payouts_total ? expected.fees_observed : null
-    expect(feeConsiderado).toBeNull()
-    expect(expected.fee_considered).toBeNull()
-  })
-
-  it('Aggregated dataset (A+B+C): Invariants hold', async () => {
-    // All three cases in same modality to test aggregation invariants
-    // Modality: CARD, CREDIT, 3 parcelas, POS, D+1
-
-    // Case A contributes:
-    const caseA = { qtd: 1, valor: 100, qtd_fee: 1, valor_taxa: 100, fee: 2 }
-
-    // Case B contributes:
-    const caseB = { qtd: 1, valor: 300, qtd_fee: 1, valor_taxa: 300, fee: 9 }
-
-    // Case C contributes:
-    const caseC = { qtd: 1, valor: 600, qtd_fee: 0, valor_taxa: 0, fee: 0 } // partial, excluded
-
-    // Aggregated totals
-    const aggregated = {
-      qtd_transacoes: caseA.qtd + caseB.qtd + caseC.qtd, // 3
-      valor_bruto: caseA.valor + caseB.valor + caseC.valor, // 1000
-      qtd_com_fee: caseA.qtd_fee + caseB.qtd_fee + caseC.qtd_fee, // 2
-      valor_base_taxa: caseA.valor_taxa + caseB.valor_taxa + caseC.valor_taxa, // 400
-      fee_total: caseA.fee + caseB.fee + caseC.fee, // 11
-    }
-
-    // Verify aggregated metrics
-    expect(aggregated.qtd_transacoes).toBe(3)
-    expect(aggregated.valor_bruto).toBe(1000)
-    expect(aggregated.qtd_com_fee).toBe(2)
-    expect(aggregated.valor_base_taxa).toBe(400)
-    expect(aggregated.fee_total).toBe(11)
-
-    // Calculated rates
-    const taxa_media_simples = (2 / 100 + 9 / 300) / 2 // (0.02 + 0.03) / 2 = 0.025
-    const taxa_media_ponderada = aggregated.fee_total / aggregated.valor_base_taxa // 11 / 400 = 0.0275
-
-    expect(taxa_media_simples).toBeCloseTo(0.025, 5)
-    expect(taxa_media_ponderada).toBeCloseTo(0.0275, 5)
-
-    // Percentages
-    const pct_valor_a = caseA.valor / aggregated.valor_bruto // 100 / 1000 = 0.10
-    const pct_valor_b = caseB.valor / aggregated.valor_bruto // 300 / 1000 = 0.30
-    const pct_valor_c = caseC.valor / aggregated.valor_bruto // 600 / 1000 = 0.60
-
-    const pct_transacoes_each = 1 / aggregated.qtd_transacoes // 1/3 for each
-
-    // INVARIANT TEST 1: SUM(pct_valor) = 1
-    const sum_pct_valor = pct_valor_a + pct_valor_b + pct_valor_c
-    expect(sum_pct_valor).toBeCloseTo(1.0, 10)
-
-    // INVARIANT TEST 2: SUM(pct_transacoes) = 1
-    const sum_pct_transacoes = pct_transacoes_each * 3
-    expect(sum_pct_transacoes).toBeCloseTo(1.0, 10)
-
-    // INVARIANT TEST 3: Case C does NOT participate in fee base
-    expect(aggregated.valor_base_taxa).toBe(400) // NOT 1000
-    expect(aggregated.qtd_com_fee).toBe(2) // NOT 3
-  })
-
-  it('Confiabilidade levels based on qtd_com_fee', async () => {
-    // qtd_com_fee >= 30 → ALTA
-    // qtd_com_fee >= 10 → MEDIA
-    // qtd_com_fee < 10 → BAIXA
-
-    const testCases = [
-      { qtd_com_fee: 9, expected: 'BAIXA' },
-      { qtd_com_fee: 10, expected: 'MEDIA' },
-      { qtd_com_fee: 29, expected: 'MEDIA' },
-      { qtd_com_fee: 30, expected: 'ALTA' },
-      { qtd_com_fee: 100, expected: 'ALTA' },
+  // Case A: Simple complete payout (100 with 2 fee) produces 2% rate
+  it('Case A: Single complete transaction/payout = 2% rate', async () => {
+    const transactions = [
+      {
+        id: 'tx1',
+        org_id: 'org1',
+        type: 'PAYMENT',
+        transaction_code: 'CODE001',
+        timestamp_utc: '2026-01-15T10:00:00Z',
+        amount: 100,
+        fee_amount: 2,
+        status: 'SUCCESSFUL',
+        payment_type: 'CARD',
+        card_type: 'CREDIT',
+        installments_count: 1,
+        entry_mode: 'POS',
+        payout_plan: 'D+1',
+        payouts_total: 1,
+        payouts_received: 1,
+      },
     ]
 
-    for (const tc of testCases) {
-      const confidence =
-        tc.qtd_com_fee >= 30 ? 'ALTA' : tc.qtd_com_fee >= 10 ? 'MEDIA' : 'BAIXA'
-      expect(confidence).toBe(tc.expected)
-    }
+    const payouts = [
+      {
+        org_id: 'org1',
+        type: 'PAYOUT',
+        status: 'SUCCESSFUL',
+        transaction_code: 'CODE001',
+        payout_date: '2026-01-15',
+        fee: 2,
+        amount: 100,
+      },
+    ]
+
+    // Create mock with table data
+    mockAdmin = createMockSupabaseClient({
+      sumup_transactions: transactions,
+      sumup_payouts: payouts,
+    })
+
+    // MANDATORY: Call the real function
+    const result = await calculateTaxas12m(mockAdmin, 'org1')
+
+    // Validate
+    expect(result).toHaveLength(1)
+    const metric = result[0]
+    expect(metric.qtd_transacoes_12m).toBe(1)
+    expect(metric.valor_bruto_12m).toBe(100)
+    expect(metric.qtd_com_fee).toBe(1)
+    expect(metric.fee_total_12m).toBe(2)
+    expect(metric.taxa_media_simples).toBe(0.02) // 2 / 100
+  })
+
+  // Case B: Multiple payouts
+  it('Case B: 300 sale with 3 payouts (each 3 fee) = 3% rate', async () => {
+    const transactions = [
+      {
+        id: 'tx2',
+        org_id: 'org1',
+        type: 'PAYMENT',
+        transaction_code: 'CODE002',
+        timestamp_utc: '2026-02-10T10:00:00Z',
+        amount: 300,
+        fee_amount: null,
+        status: 'SUCCESSFUL',
+        payment_type: 'CARD',
+        card_type: 'CREDIT',
+        installments_count: 3,
+        entry_mode: 'POS',
+        payout_plan: 'D+1',
+        payouts_total: 3,
+        payouts_received: 3,
+      },
+    ]
+
+    const payouts = [
+      { org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE002', payout_date: '2026-02-10', fee: 3, amount: 100 },
+      { org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE002', payout_date: '2026-02-10', fee: 3, amount: 100 },
+      { org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE002', payout_date: '2026-02-10', fee: 3, amount: 100 },
+    ]
+
+    mockAdmin = createMockSupabaseClient({
+      sumup_transactions: transactions,
+      sumup_payouts: payouts,
+    })
+
+    const result = await calculateTaxas12m(mockAdmin, 'org1')
+
+    expect(result).toHaveLength(1)
+    const metric = result[0]
+    expect(metric.qtd_transacoes_12m).toBe(1)
+    expect(metric.valor_bruto_12m).toBe(300)
+    expect(metric.qtd_com_fee).toBe(1)
+    expect(metric.fee_total_12m).toBe(9) // 3 + 3 + 3
+    expect(metric.taxa_media_simples).toBeCloseTo(0.03, 5)
+  })
+
+  // Case C: Partial payout - CRITICAL
+  it('Case C: Partial payout (600, 2/6 received) excludes from fee metrics', async () => {
+    const transactions = [
+      {
+        id: 'tx3',
+        org_id: 'org1',
+        type: 'PAYMENT',
+        transaction_code: 'CODE003',
+        timestamp_utc: '2026-03-05T10:00:00Z',
+        amount: 600,
+        fee_amount: null,
+        status: 'SUCCESSFUL',
+        payment_type: 'CARD',
+        card_type: 'CREDIT',
+        installments_count: 6,
+        entry_mode: 'POS',
+        payout_plan: 'D+1',
+        payouts_total: 6,
+        payouts_received: 2, // PARTIAL
+      },
+    ]
+
+    const payouts = [
+      { org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE003', payout_date: '2026-03-10', fee: 2, amount: 100 },
+      { org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE003', payout_date: '2026-03-10', fee: 2, amount: 100 },
+      // Only 2/6 received, so others not in data yet
+    ]
+
+    mockAdmin = createMockSupabaseClient({
+      sumup_transactions: transactions,
+      sumup_payouts: payouts,
+    })
+
+    const result = await calculateTaxas12m(mockAdmin, 'org1')
+
+    // Critical: transaction counts in totals
+    expect(result).toHaveLength(1)
+    const metric = result[0]
+    expect(metric.qtd_transacoes_12m).toBe(1) // Still counts
+    expect(metric.valor_bruto_12m).toBe(600) // Still counts
+
+    // But NOT in fee metrics
+    expect(metric.qtd_com_fee).toBe(0) // Excluded: partial payout
+    expect(metric.fee_total_12m).toBe(0) // Excluded
+    expect(metric.taxa_media_simples).toBeNull() // No valid fee data
+  })
+
+  // Invariant tests
+  it('Invariant: SUM(pct_valor) = 1.0 for single modality', async () => {
+    const transactions = [
+      {
+        id: 'tx4',
+        org_id: 'org1',
+        type: 'PAYMENT',
+        transaction_code: 'CODE004',
+        timestamp_utc: '2026-04-20T10:00:00Z',
+        amount: 150,
+        fee_amount: 3,
+        status: 'SUCCESSFUL',
+        payment_type: 'CARD',
+        card_type: 'CREDIT',
+        installments_count: 1,
+        entry_mode: 'POS',
+        payout_plan: 'D+1',
+        payouts_total: 1,
+        payouts_received: 1,
+      },
+    ]
+
+    const payouts = [{ org_id: 'org1', type: 'PAYOUT', status: 'SUCCESSFUL', transaction_code: 'CODE004', payout_date: '2026-04-20', fee: 3, amount: 150 }]
+
+    mockAdmin = createMockSupabaseClient({
+      sumup_transactions: transactions,
+      sumup_payouts: payouts,
+    })
+
+    const result = await calculateTaxas12m(mockAdmin, 'org1')
+
+    const sumPct = result.reduce((sum, m) => sum + m.pct_valor_12m, 0)
+    expect(sumPct).toBeCloseTo(1.0, 4)
   })
 })
-
-/**
- * TODO: Integration test with mock database
- *
- * When db mocking is set up, add:
- * - Mock sumup_transactions (3 transactions: A, B, C)
- * - Mock sumup_payouts (aggregated by transaction_code)
- * - Call calculateTaxas12m()
- * - Verify output matches expected metrics above
- */

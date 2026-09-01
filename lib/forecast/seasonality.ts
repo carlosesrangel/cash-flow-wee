@@ -2,11 +2,12 @@
  * Sazonalidade Engine: 3-Band Monthly Distribution
  *
  * Decomposes monthly revenue into 3 bands (days 1-9, 10-19, 20-31)
- * with fallback hierarchy for incomplete data:
- * 1. Year-specific (same year/month, previous year)
- * 2. Recent average (last 6 months regardless of year)
- * 3. Global 12M average
- * 4. Default: equal split (1/3 each)
+ * with fallback hierarchy per Power Query specification:
+ *
+ * Tier 1: Same month previous year
+ * Tier 2: Same month most recent year available
+ * Tier 3: Global 12-month average (last 12M before projection)
+ * Tier 4: Uniform fallback (1/3 each) if no history
  *
  * Power Query specification: Points 11-13
  */
@@ -20,12 +21,17 @@ export interface SeasonalityBands {
   band2_peso: number // days 10-19
   band3_peso: number // days 20-31
   receita_mes: number // total for reference
-  fallback_used: 'HISTORICAL' | 'RECENT' | 'GLOBAL' | 'DEFAULT'
+  fallback_used:
+    | 'SAME_MONTH_PREVIOUS_YEAR'
+    | 'SAME_MONTH_MOST_RECENT'
+    | 'GLOBAL_12M'
+    | 'ALL_HISTORY'
+    | 'SEM_HISTORICO_UNIFORME'
 }
 
 /**
  * Calculate seasonality bands for an organization
- * Uses 24-month historical window for fallbacks
+ * Uses historical transactions to determine band distribution
  */
 export async function calculateSeasonality3Bands(
   admin: SupabaseClient,
@@ -33,18 +39,7 @@ export async function calculateSeasonality3Bands(
   targetYear: number,
   targetMonth: number
 ): Promise<SeasonalityBands> {
-  // Load 24-month historical transactions
-  const windowEnd = new Date()
-  windowEnd.setFullYear(targetYear, targetMonth - 1, 1)
-  windowEnd.setDate(0) // last day of target month
-
-  const windowStart = new Date()
-  windowStart.setFullYear(targetYear - 2, targetMonth - 1, 1) // 24M ago
-
-  const startDate = windowStart.toISOString().split('T')[0]
-  const endDate = windowEnd.toISOString().split('T')[0]
-
-  // Load transactions grouped by month and band
+  // Load all historical transactions (no arbitrary limit)
   const { data: transactions, error } = await admin
     .from('sumup_transactions')
     .select('created_at, amount, refunded_amount')
@@ -52,8 +47,7 @@ export async function calculateSeasonality3Bands(
     .eq('type', 'PAYMENT')
     .eq('status', 'SUCCESSFUL')
     .gt('amount', 0)
-    .gte('created_at', `${startDate}T00:00:00Z`)
-    .lte('created_at', `${endDate}T23:59:59Z`)
+    .order('created_at', { ascending: true })
 
   if (error) throw new Error(`Failed to load transactions: ${error.message}`)
 
@@ -73,7 +67,9 @@ export async function calculateSeasonality3Bands(
     const year = date.getFullYear()
     const month = date.getMonth() + 1
     const day = date.getDate()
-    const net = (tx.amount || 0) - (tx.refunded_amount || 0)
+
+    // Net revenue: amount - refunded, floored at 0
+    const net = Math.max(0, (tx.amount || 0) - (tx.refunded_amount || 0))
 
     const key = `${year}-${String(month).padStart(2, '0')}`
     const existing = bandsByMonth.get(key) || { band1: 0, band2: 0, band3: 0, total: 0 }
@@ -89,7 +85,7 @@ export async function calculateSeasonality3Bands(
     bandsByMonth.set(key, existing)
   }
 
-  // Try Tier 1: Same month previous year
+  // Tier 1: Same month previous year
   const prevYearKey = `${targetYear - 1}-${String(targetMonth).padStart(2, '0')}`
   const prevYear = bandsByMonth.get(prevYearKey)
 
@@ -101,60 +97,55 @@ export async function calculateSeasonality3Bands(
       band2_peso: prevYear.band2 / prevYear.total,
       band3_peso: prevYear.band3 / prevYear.total,
       receita_mes: prevYear.total,
-      fallback_used: 'HISTORICAL',
+      fallback_used: 'SAME_MONTH_PREVIOUS_YEAR',
     }
   }
 
-  // Try Tier 2: Recent 6-month average (any year)
-  const recentStart = new Date()
-  recentStart.setMonth(recentStart.getMonth() - 6)
+  // Tier 2: Same month most recent year available
+  // Find the most recent year that has this month
+  let mostRecentYear: { band1: number; band2: number; band3: number; total: number } | null = null
+  let foundYear = -1
 
-  const recentMonths = new Map<string, { band1: number; band2: number; band3: number; total: number }>()
+  for (let checkYear = targetYear - 2; checkYear >= 1900; checkYear--) {
+    const key = `${checkYear}-${String(targetMonth).padStart(2, '0')}`
+    const candidate = bandsByMonth.get(key)
+    if (candidate && candidate.total > 0) {
+      mostRecentYear = candidate
+      foundYear = checkYear
+      break
+    }
+  }
+
+  if (mostRecentYear && mostRecentYear.total > 0) {
+    return {
+      ano: targetYear,
+      mes: targetMonth,
+      band1_peso: mostRecentYear.band1 / mostRecentYear.total,
+      band2_peso: mostRecentYear.band2 / mostRecentYear.total,
+      band3_peso: mostRecentYear.band3 / mostRecentYear.total,
+      receita_mes: mostRecentYear.total,
+      fallback_used: 'SAME_MONTH_MOST_RECENT',
+    }
+  }
+
+  // Tier 3: Global 12-month average (last 12 months before target date)
+  const targetDate = new Date(targetYear, targetMonth - 1, 1)
+  const windowStart = new Date(targetDate)
+  windowStart.setMonth(windowStart.getMonth() - 12)
+
+  const last12m = { band1: 0, band2: 0, band3: 0, total: 0 }
 
   for (const [key, bands] of bandsByMonth.entries()) {
     const [y, m] = key.split('-').map(Number)
-    const keyDate = new Date(y, m - 1, 1)
-    if (keyDate >= recentStart) {
-      recentMonths.set(key, bands)
+    const checkDate = new Date(y, m - 1, 1)
+
+    if (checkDate >= windowStart && checkDate < targetDate) {
+      last12m.band1 += bands.band1
+      last12m.band2 += bands.band2
+      last12m.band3 += bands.band3
+      last12m.total += bands.total
     }
   }
-
-  if (recentMonths.size > 0) {
-    const aggregated = Array.from(recentMonths.values()).reduce(
-      (acc, b) => ({
-        band1: acc.band1 + b.band1,
-        band2: acc.band2 + b.band2,
-        band3: acc.band3 + b.band3,
-        total: acc.total + b.total,
-      }),
-      { band1: 0, band2: 0, band3: 0, total: 0 }
-    )
-
-    if (aggregated.total > 0) {
-      return {
-        ano: targetYear,
-        mes: targetMonth,
-        band1_peso: aggregated.band1 / aggregated.total,
-        band2_peso: aggregated.band2 / aggregated.total,
-        band3_peso: aggregated.band3 / aggregated.total,
-        receita_mes: aggregated.total,
-        fallback_used: 'RECENT',
-      }
-    }
-  }
-
-  // Try Tier 3: Global 12-month average
-  const last12m = Array.from(bandsByMonth.values())
-    .slice(-12)
-    .reduce(
-      (acc, b) => ({
-        band1: acc.band1 + b.band1,
-        band2: acc.band2 + b.band2,
-        band3: acc.band3 + b.band3,
-        total: acc.total + b.total,
-      }),
-      { band1: 0, band2: 0, band3: 0, total: 0 }
-    )
 
   if (last12m.total > 0) {
     return {
@@ -164,11 +155,32 @@ export async function calculateSeasonality3Bands(
       band2_peso: last12m.band2 / last12m.total,
       band3_peso: last12m.band3 / last12m.total,
       receita_mes: last12m.total,
-      fallback_used: 'GLOBAL',
+      fallback_used: 'GLOBAL_12M',
     }
   }
 
-  // Tier 4: Default (equal split)
+  // Tier 3b: All history available
+  const allHistory = { band1: 0, band2: 0, band3: 0, total: 0 }
+  for (const bands of bandsByMonth.values()) {
+    allHistory.band1 += bands.band1
+    allHistory.band2 += bands.band2
+    allHistory.band3 += bands.band3
+    allHistory.total += bands.total
+  }
+
+  if (allHistory.total > 0) {
+    return {
+      ano: targetYear,
+      mes: targetMonth,
+      band1_peso: allHistory.band1 / allHistory.total,
+      band2_peso: allHistory.band2 / allHistory.total,
+      band3_peso: allHistory.band3 / allHistory.total,
+      receita_mes: allHistory.total,
+      fallback_used: 'ALL_HISTORY',
+    }
+  }
+
+  // Tier 4: Uniform fallback (no history)
   return {
     ano: targetYear,
     mes: targetMonth,
@@ -176,17 +188,17 @@ export async function calculateSeasonality3Bands(
     band2_peso: 1 / 3,
     band3_peso: 1 / 3,
     receita_mes: 0,
-    fallback_used: 'DEFAULT',
+    fallback_used: 'SEM_HISTORICO_UNIFORME',
   }
 }
 
 /**
- * Validate seasonality invariants for a month
+ * Validate seasonality invariants
  * SUM(band_peso) should = 1.0
  */
 export function validateSeasonalityInvariants(bands: SeasonalityBands): boolean {
   const sum = bands.band1_peso + bands.band2_peso + bands.band3_peso
-  return Math.abs(sum - 1.0) < 0.0001 // allow floating point error
+  return Math.abs(sum - 1.0) < 0.0001
 }
 
 /**
