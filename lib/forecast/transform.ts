@@ -109,24 +109,22 @@ export async function transformForecastMonthToReceipts(
   const sezonalidade = await applySeasonalityToMonth(admin, orgId, mes.mes, mes.ano, mes.value)
 
   if (!sezonalidade.invariante_check.valida) {
-    console.warn(`Seasonality invariant failed for ${mes.ano}-${mes.mes}`, sezonalidade.invariante_check)
+    throw new Error(
+      `CRITICAL: Seasonality invariant failed for ${mes.ano}-${mes.mes}: ` +
+      `SUM(bands) = ${sezonalidade.invariante_check.soma_pesos} (expected 1.0). ` +
+      `Cannot project receipts with invalid seasonal distribution. ` +
+      `Ensure historical transaction data is complete.`
+    )
   }
 
   // Step 2: Get payment mix
   const mix = await getPaymentMix(admin, orgId)
   if (mix.length === 0) {
-    console.warn(`No payment mix found for org ${orgId}; using fallback (PIX 100%)`)
-    // Fallback: assume PIX 100%
-    mix.push({
-      payment_type: 'PIX',
-      card_type: 'NAO_INFORMADO',
-      nro_parcelas_modelo: 1,
-      entry_mode: 'NAO_INFORMADO',
-      payout_plan: 'NAO_INFORMADO',
-      participacao_historica: 1.0,
-      taxa_utilizada: 0.01,
-      fonte_taxa: 'SEM_TAXA_HISTORICA',
-    })
+    throw new Error(
+      `CRITICAL: No payment mix found for org ${orgId}. ` +
+      `Cannot project receipts without historical fee rate data. ` +
+      `Ensure OList/SumUp sync has completed and sumup_fee_rates_12m is populated.`
+    )
   }
 
   // Step 3: For each band, cross with each modality
