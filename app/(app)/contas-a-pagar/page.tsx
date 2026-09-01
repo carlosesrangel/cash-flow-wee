@@ -19,7 +19,7 @@ export default async function ContasAPagarPage() {
   const supabase = await createServerSupabaseClient()
   const { data: apRows, error } = await supabase
     .from('olist_accounts_payable')
-    .select('id, valor, saldo, situacao, data_vencimento, data_liquidacao, historico, numero_documento, fornecedor_olist_id')
+    .select('id, valor, saldo, valor_pago, situacao, data_vencimento, data_liquidacao, historico, numero_documento, fornecedor_olist_id, categoria_id, categoria')
     .eq('org_id', member.orgId)
     .order('data_vencimento', { ascending: true })
 
@@ -27,7 +27,7 @@ export default async function ContasAPagarPage() {
     throw new Error(`Falha ao carregar contas a pagar: ${error.message}`)
   }
 
-  const { data: contacts } = await supabase.from('olist_contacts').select('olist_id, nome')
+  const { data: contacts } = await supabase.from('olist_contacts').select('olist_id, nome').eq('org_id', member.orgId)
   const contactNameByOlistId = new Map((contacts ?? []).map((c) => [c.olist_id as number, c.nome as string | null]))
 
   const today = toLocalDateParam(new Date())
@@ -48,6 +48,9 @@ export default async function ContasAPagarPage() {
       fornecedorNome: row.fornecedor_olist_id ? (contactNameByOlistId.get(row.fornecedor_olist_id) ?? null) : null,
       valor: row.valor,
       saldo: row.saldo,
+      valorPago: row.valor_pago,
+      dataVencimento: row.data_vencimento,
+      categoria: row.categoria,
       classification,
       payableStatus,
       agingBucket:

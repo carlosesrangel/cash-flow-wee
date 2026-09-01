@@ -1,55 +1,27 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { formatBRL } from '@/lib/format/currency'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
+import {
+  calculatePayableTotals,
+  getPayableStatusCounts,
+  matchesPayableFilter,
+  UNCATEGORIZED_FILTER,
+  type PayableFilterState,
+} from '@/lib/payables/filters'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
-type AgingBucket = 'vencido' | '0-7' | '8-15' | '16-30' | '31-60' | '61+'
-
-interface FilterState {
-  dateFrom: string
-  dateTo: string
-  status: AgingBucket | 'all'
-  supplier: string
-  minValue: number | null
-  maxValue: number | null
-}
-
-const getDateRange = (preset: string, today: string): [string, string] => {
-  const todayDate = new Date(today)
-  const tomorrow = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000)
-  const weekLater = new Date(todayDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const thirtyDaysLater = new Date(todayDate.getTime() + 30 * 24 * 60 * 60 * 1000)
-  const sixtyDaysLater = new Date(todayDate.getTime() + 60 * 24 * 60 * 60 * 1000)
-  const ninetyDaysLater = new Date(todayDate.getTime() + 90 * 24 * 60 * 60 * 1000)
-
-  const dateToString = (d: Date) => d.toISOString().split('T')[0]
-
-  switch (preset) {
-    case 'week':
-      return [today, dateToString(weekLater)]
-    case 'month':
-      return [today, dateToString(thirtyDaysLater)]
-    case 'sixty':
-      return [today, dateToString(sixtyDaysLater)]
-    case 'ninety':
-      return [today, dateToString(ninetyDaysLater)]
-    default:
-      return [today, dateToString(sixtyDaysLater)]
-  }
-}
-
-const getAgingBucket = (daysUntilDue: number): AgingBucket => {
-  if (daysUntilDue < 0) return 'vencido'
-  if (daysUntilDue <= 7) return '0-7'
-  if (daysUntilDue <= 15) return '8-15'
-  if (daysUntilDue <= 30) return '16-30'
-  if (daysUntilDue <= 60) return '31-60'
-  return '61+'
-}
+const STATUS_FILTERS: Array<{ value: PayableFilterState['status']; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'open', label: 'Em aberto' },
+  { value: 'due_soon', label: 'Vencendo em 7 dias' },
+  { value: 'paid', label: 'Pagas' },
+  { value: 'overdue', label: 'Atrasadas' },
+  { value: 'cancelled', label: 'Canceladas' },
+]
 
 export function AccountsPayableFilters({
   rows,
@@ -60,253 +32,73 @@ export function AccountsPayableFilters({
   suppliers: string[]
   today: string
 }) {
-  const [dateFrom, dateTo] = getDateRange('sixty', today)
-  const [filters, setFilters] = useState<FilterState>({
-    dateFrom,
-    dateTo,
+  const [filters, setFilters] = useState<PayableFilterState>({
     status: 'all',
-    supplier: '',
+    categoria: 'all',
+    fornecedor: '',
     minValue: null,
     maxValue: null,
   })
-
-  const filteredRows = useMemo(() => {
-    const todayDate = new Date(today)
-
-    return rows.filter((row) => {
-      if (!row.classification.included) return false
-
-      const dueDate = new Date((row.classification as any).date)
-
-      // Date filter
-      const dateFromObj = new Date(filters.dateFrom)
-      const dateToObj = new Date(filters.dateTo)
-      if (dueDate < dateFromObj || dueDate > dateToObj) return false
-
-      // Status filter
-      if (filters.status !== 'all') {
-        const daysUntilDue = Math.ceil((dueDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
-        const bucket = getAgingBucket(daysUntilDue)
-        if (bucket !== filters.status) return false
-      }
-
-      // Supplier filter
-      if (filters.supplier && row.fornecedorNome !== filters.supplier) return false
-
-      // Value filter
-      const valor = row.valor ?? 0
-      if (filters.minValue !== null && valor < filters.minValue) return false
-      if (filters.maxValue !== null && valor > filters.maxValue) return false
-
-      return true
-    })
-  }, [rows, today, filters])
-
-  const handleDatePreset = (preset: string) => {
-    const [newFrom, newTo] = getDateRange(preset, today)
-    setFilters((prev) => ({ ...prev, dateFrom: newFrom, dateTo: newTo }))
-  }
-
-  const handleReset = () => {
-    const [newFrom, newTo] = getDateRange('sixty', today)
-    setFilters({
-      dateFrom: newFrom,
-      dateTo: newTo,
-      status: 'all',
-      supplier: '',
-      minValue: null,
-      maxValue: null,
-    })
-  }
-
-  const hasActiveFilters =
-    filters.status !== 'all' || filters.supplier || filters.minValue || filters.maxValue
-
-  const statusLabels: Record<AgingBucket | 'all', string> = {
-    all: 'Todos',
-    vencido: 'Vencido',
-    '0-7': '0-7 dias',
-    '8-15': '8-15 dias',
-    '16-30': '16-30 dias',
-    '31-60': '31-60 dias',
-    '61+': '61+ dias',
-  }
+  const categories = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.categoria?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+    [rows]
+  )
+  const counts = useMemo(() => getPayableStatusCounts(rows), [rows])
+  const filteredRows = useMemo(() => rows.filter((row) => matchesPayableFilter(row, filters)), [rows, filters])
+  const totals = useMemo(() => calculatePayableTotals(filteredRows), [filteredRows])
+  const hasUncategorized = rows.some((row) => !row.categoria?.trim())
+  const hasActiveFilters = filters.status !== 'all' || filters.categoria !== 'all' || Boolean(filters.fornecedor) || filters.minValue !== null || filters.maxValue !== null
+  const reset = () => setFilters({ status: 'all', categoria: 'all', fornecedor: '', minValue: null, maxValue: null })
 
   return (
-    <div className="space-y-4">
-      {/* Date Range Selector */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Calendar className="w-4 h-4" />
-          <span>Data de Vencimento</span>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('week', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('week')}
-          >
-            Próxima Semana
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2" aria-label="Filtros de status">
+        {STATUS_FILTERS.map((option) => (
+          <Button key={option.value} type="button" size="sm" variant={filters.status === option.value ? 'default' : 'outline'} onClick={() => setFilters((previous) => ({ ...previous, status: option.value }))}>
+            {option.label} <span className="ml-1 opacity-75">{counts[option.value]}</span>
           </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('month', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('month')}
-          >
-            Próximo Mês
-          </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('sixty', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('sixty')}
-          >
-            Próximos 60 dias ⭐
-          </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('ninety', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('ninety')}
-          >
-            Próximos 90 dias
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground">De</label>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
-              className="w-full px-2 py-2 border rounded text-sm"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground">Até</label>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
-              className="w-full px-2 py-2 border rounded text-sm"
-            />
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Status Filter */}
-      <div className="space-y-2">
-        <div className="text-sm font-semibold">Status de Vencimento</div>
-        <div className="flex gap-2 flex-wrap">
-          {(Object.entries(statusLabels) as [AgingBucket | 'all', string][]).map(([status, label]) => (
-            <Button
-              key={status}
-              variant={filters.status === status ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilters((prev) => ({ ...prev, status }))}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Supplier Filter */}
-      {suppliers.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-sm font-semibold">Fornecedor</div>
-          <select
-            value={filters.supplier}
-            onChange={(e) => setFilters((prev) => ({ ...prev, supplier: e.target.value }))}
-            className="w-full px-3 py-2 border rounded text-sm"
-          >
-            <option value="">Todos os fornecedores</option>
-            {suppliers.map((supplier) => (
-              <option key={supplier} value={supplier}>
-                {supplier}
-              </option>
-            ))}
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="space-y-1 text-sm font-medium">
+          <span>Categoria</span>
+          <select aria-label="Categoria" value={filters.categoria} onChange={(event) => setFilters((previous) => ({ ...previous, categoria: event.target.value }))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal">
+            <option value="all">Todas as categorias</option>
+            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+            {hasUncategorized && <option value={UNCATEGORIZED_FILTER}>Sem categoria</option>}
           </select>
-        </div>
-      )}
-
-      {/* Value Filter */}
-      <div className="space-y-2">
-        <div className="text-sm font-semibold">Valor</div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground">Mínimo</label>
-            <input
-              type="number"
-              placeholder="0"
-              value={filters.minValue ?? ''}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  minValue: e.target.value ? parseFloat(e.target.value) : null,
-                }))
-              }
-              className="w-full px-2 py-2 border rounded text-sm"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-muted-foreground">Máximo</label>
-            <input
-              type="number"
-              placeholder="∞"
-              value={filters.maxValue ?? ''}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  maxValue: e.target.value ? parseFloat(e.target.value) : null,
-                }))
-              }
-              className="w-full px-2 py-2 border rounded text-sm"
-            />
-          </div>
+        </label>
+        <label className="space-y-1 text-sm font-medium">
+          <span>Fornecedor</span>
+          <select aria-label="Fornecedor" value={filters.fornecedor} onChange={(event) => setFilters((previous) => ({ ...previous, fornecedor: event.target.value }))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal">
+            <option value="">Todos os fornecedores</option>
+            {suppliers.map((supplier) => <option key={supplier} value={supplier}>{supplier}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1 text-sm font-medium"><span>Mínimo</span><input aria-label="Valor mínimo" type="number" min="0" step="0.01" value={filters.minValue ?? ''} onChange={(event) => setFilters((previous) => ({ ...previous, minValue: event.target.value ? Number(event.target.value) : null }))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal" /></label>
+          <label className="space-y-1 text-sm font-medium"><span>Máximo</span><input aria-label="Valor máximo" type="number" min="0" step="0.01" value={filters.maxValue ?? ''} onChange={(event) => setFilters((previous) => ({ ...previous, maxValue: event.target.value ? Number(event.target.value) : null }))} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal" /></label>
         </div>
       </div>
 
-      {/* Summary & Reset */}
-      <div className="flex items-center justify-between pt-4 border-t">
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-sm">
-            {filteredRows.length} de {rows.length} registros
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            Total: {formatBRL(filteredRows.reduce((sum, row) => sum + (row.valor ?? 0), 0))}
-          </span>
-        </div>
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={handleReset} className="gap-2">
-            <X className="w-4 h-4" />
-            Limpar Filtros
-          </Button>
-        )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Summary label="Saldo total em aberto" value={totals.openBalance} />
+        <Summary label="Saldo atrasado" value={totals.overdueBalance} tone="red" />
+        <Summary label="Saldo vencendo em até 7 dias" value={totals.dueSoonBalance} tone="amber" />
+        <Summary label="Saldo aberto >7 dias" value={totals.openOver7Balance} />
       </div>
 
-      {/* Table */}
-      <div className="pt-4 border-t">
-        <AccountsPayableTable rows={filteredRows} today={today} />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+        <div className="flex items-center gap-2"><Badge variant="secondary">{filteredRows.length} de {rows.length} contas</Badge><span className="text-sm text-muted-foreground">Totais com saldo conhecido.</span></div>
+        {hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={reset} className="gap-2"><X className="h-4 w-4" />Limpar filtros</Button>}
       </div>
+      <AccountsPayableTable rows={filteredRows} today={today} />
     </div>
   )
+}
+
+function Summary({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'red' | 'amber' }) {
+  const toneClass = tone === 'red' ? 'text-red-600' : tone === 'amber' ? 'text-amber-600' : 'text-foreground'
+  return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className={`mt-1 font-mono text-lg font-semibold ${toneClass}`}>{formatBRL(value)}</p></div>
 }

@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
 import type { ClassifiedEntry } from '@/lib/cash-flow/classify'
-import { AGING_BUCKET_LABEL, type AgingBucket } from '@/lib/cash-flow/aging'
-import { Badge } from '@/components/ui/badge'
+import type { AgingBucket } from '@/lib/cash-flow/aging'
+import type { PayableStatusResult } from '@/lib/payables/classify-status'
+import { getPaidAmount } from '@/lib/payables/filters'
 import { ArrowUpDown } from 'lucide-react'
 
 export type AccountsPayableRow = {
@@ -14,6 +15,11 @@ export type AccountsPayableRow = {
   historico: string | null
   fornecedorNome: string | null
   valor: number | null
+  saldo: number | null
+  valorPago: number | null
+  dataVencimento: string | null
+  categoria: string | null
+  payableStatus: PayableStatusResult
   classification: ClassifiedEntry
   agingBucket: AgingBucket | null
 }
@@ -24,31 +30,28 @@ const EXCLUSION_REASON_LABEL: Record<Exclude<ClassifiedEntry, { included: true }
   dados_incompletos: 'dados incompletos',
 }
 
-const BUCKET_LABEL: Record<'realizado' | 'contratado', string> = {
-  realizado: 'Realizado',
-  contratado: 'Contratado',
-}
-
-const getAgingBadgeVariant = (bucket: AgingBucket | null): 'destructive' | 'warning' | 'success' | 'default' => {
-  if (!bucket) return 'default'
-  switch (bucket) {
-    case 'vencido':
-      return 'destructive'
-    case '0-7':
-      return 'warning'
-    case '8-15':
-      return 'warning'
-    default:
-      return 'success'
-  }
-}
-
-type SortField = 'fornecedor' | 'vencimento' | 'valor' | 'aging'
+type SortField = 'status' | 'fornecedor' | 'categoria' | 'vencimento' | 'valor' | 'saldo'
 type SortDirection = 'asc' | 'desc'
+
+const STATUS_DOT_CLASS: Record<PayableStatusResult['color'], string> = {
+  gray: 'bg-neutral-400',
+  red: 'bg-red-500',
+  yellow: 'bg-amber-400',
+  green: 'bg-emerald-500',
+}
+
+function StatusIndicator({ status }: { status: PayableStatusResult }) {
+  return (
+    <span className="inline-flex items-center gap-2" title={status.label} aria-label={`Status: ${status.label}`}>
+      <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASS[status.color]}`} />
+      <span>{status.label}</span>
+    </span>
+  )
+}
 
 export function AccountsPayableTable({ rows, today }: { rows: AccountsPayableRow[]; today: string }) {
   void today
-  const [sortField, setSortField] = useState<SortField>('vencimento')
+  const [sortField, setSortField] = useState<SortField>('status')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   const handleSort = (field: SortField) => {
@@ -65,35 +68,44 @@ export function AccountsPayableTable({ rows, today }: { rows: AccountsPayableRow
     return <ArrowUpDown size={14} className={sortDirection === 'asc' ? 'rotate-180' : ''} />
   }
 
-  const included = rows.filter((row) => row.classification.included)
   const excluded = rows.filter((row) => !row.classification.included)
 
-  const sortedRows = [...included].sort((a, b) => {
+  const sortedRows = [...rows].sort((a, b) => {
     let aVal: any
     let bVal: any
 
     switch (sortField) {
+      case 'status':
+        aVal = a.payableStatus.priority
+        bVal = b.payableStatus.priority
+        break
       case 'fornecedor':
         aVal = a.fornecedorNome || ''
         bVal = b.fornecedorNome || ''
         break
+      case 'categoria':
+        aVal = a.categoria || ''
+        bVal = b.categoria || ''
+        break
       case 'vencimento':
-        aVal = (a.classification as any).date || ''
-        bVal = (b.classification as any).date || ''
+        aVal = a.dataVencimento || ''
+        bVal = b.dataVencimento || ''
         break
       case 'valor':
         aVal = a.valor ?? 0
         bVal = b.valor ?? 0
         break
-      case 'aging':
-        aVal = a.agingBucket || 'z'
-        bVal = b.agingBucket || 'z'
+      case 'saldo':
+        aVal = a.saldo ?? 0
+        bVal = b.saldo ?? 0
         break
     }
 
     if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
     if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
-    return 0
+    const aDate = a.dataVencimento || ''
+    const bDate = b.dataVencimento || ''
+    return aDate.localeCompare(bDate)
   })
 
   if (rows.length === 0) {
@@ -107,12 +119,20 @@ export function AccountsPayableTable({ rows, today }: { rows: AccountsPayableRow
         <table className="w-full text-left text-sm">
           <thead className="border-b bg-muted/50 text-muted-foreground">
             <tr>
-              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('fornecedor')}>
+              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('status')}>
                 <div className="flex items-center gap-2">
-                  Fornecedor
-                  <SortIcon field="fornecedor" />
+                  Status
+                  <SortIcon field="status" />
                 </div>
               </th>
+              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('fornecedor')}>
+                <div className="flex items-center gap-2">Fornecedor<SortIcon field="fornecedor" /></div>
+              </th>
+              <th className="px-3 py-3 font-medium">Histórico</th>
+              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('categoria')}>
+                <div className="flex items-center gap-2">Categoria<SortIcon field="categoria" /></div>
+              </th>
+              <th className="px-3 py-3 font-medium">Nº documento</th>
               <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('vencimento')}>
                 <div className="flex items-center gap-2">
                   Vencimento
@@ -125,48 +145,31 @@ export function AccountsPayableTable({ rows, today }: { rows: AccountsPayableRow
                   <SortIcon field="valor" />
                 </div>
               </th>
-              <th className="px-3 py-3 font-medium">Situação</th>
-              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('aging')}>
-                <div className="flex items-center gap-2">
-                  Status
-                  <SortIcon field="aging" />
-                </div>
+              <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted text-right" onClick={() => handleSort('saldo')}>
+                <div className="flex items-center justify-end gap-2">Saldo<SortIcon field="saldo" /></div>
               </th>
+              <th className="px-3 py-3 font-medium text-right">Pago</th>
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((row) => {
-              const classification = row.classification as { included: true; bucket: 'realizado' | 'contratado'; date: string }
+              const paidAmount = getPaidAmount(row)
               return (
                 <tr
                   key={row.id}
-                  className={`border-b last:border-0 transition-colors ${
-                    row.agingBucket === 'vencido'
-                      ? 'bg-destructive/5 hover:bg-destructive/10'
-                      : row.agingBucket === '0-7'
-                        ? 'bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/20 dark:hover:bg-yellow-900/30'
-                        : 'hover:bg-muted/50'
-                  }`}
+                  className="border-b last:border-0 transition-colors hover:bg-muted/50"
                 >
+                  <td className="px-3 py-3 font-medium"><StatusIndicator status={row.payableStatus} /></td>
                   <td className="px-3 py-3 font-medium text-foreground">
                     {row.fornecedorNome || row.numeroDocumento || row.historico || '—'}
                   </td>
-                  <td className="px-3 py-3">{formatDateOnlyBR(classification.date)}</td>
+                  <td className="px-3 py-3 max-w-64 truncate" title={row.historico ?? undefined}>{row.historico || '—'}</td>
+                  <td className="px-3 py-3">{row.categoria || 'Sem categoria'}</td>
+                  <td className="px-3 py-3">{row.numeroDocumento || '—'}</td>
+                  <td className="px-3 py-3">{row.dataVencimento ? formatDateOnlyBR(row.dataVencimento) : '—'}</td>
                   <td className="px-3 py-3 text-right font-mono">{row.valor != null ? formatBRL(row.valor) : '—'}</td>
-                  <td className="px-3 py-3">
-                    <Badge variant={classification.bucket === 'realizado' ? 'default' : 'secondary'}>
-                      {BUCKET_LABEL[classification.bucket]}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-3">
-                    {row.agingBucket ? (
-                      <Badge variant={getAgingBadgeVariant(row.agingBucket)}>
-                        {AGING_BUCKET_LABEL[row.agingBucket]}
-                      </Badge>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
+                  <td className="px-3 py-3 text-right font-mono">{row.saldo != null ? formatBRL(row.saldo) : '—'}</td>
+                  <td className="px-3 py-3 text-right font-mono">{paidAmount != null ? formatBRL(paidAmount) : '—'}</td>
                 </tr>
               )
             })}
@@ -177,38 +180,28 @@ export function AccountsPayableTable({ rows, today }: { rows: AccountsPayableRow
       {/* Mobile card view */}
       <div className="md:hidden space-y-3">
         {sortedRows.map((row) => {
-          const classification = row.classification as { included: true; bucket: 'realizado' | 'contratado'; date: string }
+          const paidAmount = getPaidAmount(row)
           return (
             <div
               key={row.id}
-              className={`rounded-lg border p-3 transition-colors ${
-                row.agingBucket === 'vencido'
-                  ? 'bg-destructive/5 border-destructive/20'
-                  : row.agingBucket === '0-7'
-                    ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
-                    : 'bg-card border-border'
-              }`}
+              className="rounded-lg border border-border bg-card p-3 transition-colors"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">
                     {row.fornecedorNome || row.numeroDocumento || row.historico || '—'}
                   </p>
-                  <p className="text-xs text-muted-foreground">{formatDateOnlyBR(classification.date)}</p>
+                  <p className="text-xs text-muted-foreground">{row.dataVencimento ? formatDateOnlyBR(row.dataVencimento) : 'Sem vencimento'}</p>
                 </div>
                 <p className="font-mono font-semibold text-foreground whitespace-nowrap">
                   {row.valor != null ? formatBRL(row.valor) : '—'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={classification.bucket === 'realizado' ? 'default' : 'secondary'} className="text-xs">
-                  {BUCKET_LABEL[classification.bucket]}
-                </Badge>
-                {row.agingBucket && (
-                  <Badge variant={getAgingBadgeVariant(row.agingBucket)} className="text-xs">
-                    {AGING_BUCKET_LABEL[row.agingBucket]}
-                  </Badge>
-                )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                <StatusIndicator status={row.payableStatus} />
+                <span>{row.categoria || 'Sem categoria'}</span>
+                <span>Saldo: {row.saldo != null ? formatBRL(row.saldo) : '—'}</span>
+                <span>Pago: {paidAmount != null ? formatBRL(paidAmount) : '—'}</span>
               </div>
             </div>
           )

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
+import { classifyPayableStatus } from '@/lib/payables/classify-status'
 
 const BASE_ROW: AccountsPayableRow = {
   id: 'ap-1',
@@ -8,6 +9,11 @@ const BASE_ROW: AccountsPayableRow = {
   historico: 'Frete',
   fornecedorNome: 'Transportadora XPTO',
   valor: 500,
+  saldo: 500,
+  valorPago: 0,
+  dataVencimento: '2026-09-01',
+  categoria: null,
+  payableStatus: classifyPayableStatus('aberto', 500, 500, '2026-09-01', null),
   classification: { included: true, bucket: 'contratado', date: '2026-09-01' },
   agingBucket: '16-30',
 }
@@ -25,6 +31,13 @@ describe('AccountsPayableTable', () => {
     expect(() => {
       render(<AccountsPayableTable rows={[BASE_ROW]} today="2026-08-15" />)
     }).not.toThrow()
+  })
+
+  it('renders the canonical status and balance columns', () => {
+    render(<AccountsPayableTable rows={[BASE_ROW]} today="2026-09-01" />)
+    expect(screen.getAllByText('Vence em até 7 dias').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('R$ 500,00').length).toBeGreaterThan(0)
+    expect(screen.getAllByLabelText('Status: Vence em até 7 dias').length).toBeGreaterThan(0)
   })
 
   it('lists an excluded row under "Fora do fluxo de caixa" with its reason', () => {

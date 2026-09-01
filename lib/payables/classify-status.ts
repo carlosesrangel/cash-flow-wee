@@ -20,27 +20,30 @@ export function classifyPayableStatus(
   dataLiquidacao: string | Date | null | undefined = null,
   orgTimezone: string = 'America/Sao_Paulo'
 ): PayableStatusResult {
-  // Normalize inputs
   const normalizedSituacao = situacao?.toLowerCase().trim() || ''
-  const openBalance = Number(saldo) || 0
-  const totalValue = Number(valor) || 0
+  const hasKnownBalance = saldo !== null && saldo !== undefined && Number.isFinite(Number(saldo))
+  const hasKnownValue = valor !== null && valor !== undefined && Number.isFinite(Number(valor))
+  const openBalance = hasKnownBalance ? Number(saldo) : null
+  const totalValue = hasKnownValue ? Number(valor) : null
 
   // Get today in org timezone
   const today = getTodayInTimezone(orgTimezone)
 
   // Check if cancelled
-  if (normalizedSituacao === 'cancelada' || normalizedSituacao === 'canceled') {
+  if (['cancelada', 'cancelado', 'canceled', 'cancelled'].includes(normalizedSituacao)) {
     return {
       status: 'cancelled',
       label: 'Cancelada',
       color: 'gray',
-      priority: 0,
+      priority: 6,
     }
   }
 
-  // Check if paid
-  // Precedence: situacao='pago' OR (saldo <= 0 AND valor > 0)
-  const isPaid = normalizedSituacao === 'pago' || openBalance <= 0
+  // A paid status is factual when the ERP says "pago", or when both numeric
+  // fields are known and the obligation has no remaining balance. A missing
+  // balance is intentionally not treated as zero.
+  const isPaid = normalizedSituacao === 'pago' ||
+    (openBalance !== null && openBalance <= 0 && totalValue !== null && totalValue > 0)
   if (isPaid) {
     return {
       status: 'paid',
@@ -61,7 +64,15 @@ export function classifyPayableStatus(
     }
   }
 
-  const dueDate = normalizeDate(dataVencimento)
+  const dueDate = normalizeDate(dataVencimento, orgTimezone)
+  if (!dueDate) {
+    return {
+      status: 'open',
+      label: 'Em aberto',
+      color: 'green',
+      priority: 4,
+    }
+  }
   const daysUntilDue = daysBetween(today, dueDate)
 
   // Check if overdue
@@ -107,17 +118,31 @@ function getTodayInTimezone(timezone: string): Date {
   const year = parseInt(parts.find(p => p.type === 'year')?.value || '2026')
   const month = parseInt(parts.find(p => p.type === 'month')?.value || '1') - 1
   const day = parseInt(parts.find(p => p.type === 'day')?.value || '1')
-  return new Date(year, month, day)
+  return dateOnlyToUtcEpoch(year, month + 1, day)
 }
 
 /**
  * Normalize date input
  */
-function normalizeDate(date: string | Date): Date {
+function normalizeDate(date: string | Date, timezone: string): Date | null {
   if (typeof date === 'string') {
-    return new Date(date + 'T00:00:00Z') // Treat as UTC date string
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date)
+    if (!match) return null
+    return dateOnlyToUtcEpoch(Number(match[1]), Number(match[2]), Number(match[3]))
   }
-  return date
+  if (Number.isNaN(date.getTime())) return null
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(date)
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+  if (![year, month, day].every(Number.isFinite)) return null
+  return dateOnlyToUtcEpoch(year, month, day)
 }
 
 /**
@@ -127,4 +152,8 @@ function daysBetween(date1: Date, date2: Date): number {
   const oneDay = 24 * 60 * 60 * 1000
   const diffTime = date2.getTime() - date1.getTime()
   return Math.floor(diffTime / oneDay)
+}
+
+function dateOnlyToUtcEpoch(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day))
 }
