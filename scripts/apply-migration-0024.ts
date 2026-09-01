@@ -1,11 +1,18 @@
-import 'dotenv/config'
 import { readFileSync } from 'fs'
 import { createClient } from '@supabase/supabase-js'
+import * as dotenv from 'dotenv'
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+dotenv.config({ path: '.env.local' })
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  process.exit(1)
+}
+
+const admin = createClient(supabaseUrl, supabaseKey)
 
 async function applyMigration() {
   console.log('📦 Applying migration 0024_analytical_refresh_functions.sql\n')

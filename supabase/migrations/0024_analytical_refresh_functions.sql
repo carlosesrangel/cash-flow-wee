@@ -45,18 +45,18 @@ begin
   )
   select
     target_org_id,
-    payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan,
+    payment_type, coalesce(card_type, 'UNKNOWN') as card_type, installments_count, coalesce(entry_mode, 'UNKNOWN') as entry_mode, coalesce(payout_plan, 'UNKNOWN') as payout_plan,
     count(distinct id) as qtd_transacoes_12m,
-    sum(amount_gross) as valor_bruto_12m,
-    count(distinct case when fee > 0 then id end) as qtd_com_fee,
-    sum(case when fee > 0 then amount_gross else 0 end) as valor_base_taxa_12m,
-    sum(fee) as fee_total_12m,
-    case when sum(case when fee > 0 then amount_gross else 0 end) > 0
-      then sum(fee) / sum(case when fee > 0 then amount_gross else 0 end)
+    sum(amount) as valor_bruto_12m,
+    count(distinct case when fee_amount > 0 then id end) as qtd_com_fee,
+    sum(case when fee_amount > 0 then amount else 0 end) as valor_base_taxa_12m,
+    sum(fee_amount) as fee_total_12m,
+    case when sum(case when fee_amount > 0 then amount else 0 end) > 0
+      then sum(fee_amount) / sum(case when fee_amount > 0 then amount else 0 end)
       else null
     end as taxa_media_simples,
-    case when sum(amount_gross) > 0
-      then sum(fee) / sum(amount_gross)
+    case when sum(amount) > 0
+      then sum(fee_amount) / sum(amount)
       else null
     end as taxa_media_ponderada,
     null::numeric as pct_valor_12m,  -- Will be updated in second pass
@@ -70,9 +70,9 @@ begin
     now(), 'FINANCIAL_MODEL_V2_EXCEL_PARITY'
   from sumup_transactions
   where org_id = target_org_id
-    and created_at >= v_window_start::timestamp
-    and created_at < (v_window_end + 1)::timestamp
-  group by payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan
+    and timestamp_utc >= v_window_start::timestamp
+    and timestamp_utc < (v_window_end + 1)::timestamp
+  group by payment_type, card_type, installments_count, entry_mode, payout_plan
   on conflict (org_id, payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan)
   do update set
     qtd_transacoes_12m = excluded.qtd_transacoes_12m,
@@ -135,27 +135,27 @@ begin
   )
   with monthly_data as (
     select
-      extract(year from created_at at time zone 'America/Sao_Paulo') as txn_year,
-      extract(month from created_at at time zone 'America/Sao_Paulo') as txn_month,
+      extract(year from timestamp_utc at time zone 'America/Sao_Paulo') as txn_year,
+      extract(month from timestamp_utc at time zone 'America/Sao_Paulo') as txn_month,
       case
-        when extract(day from created_at at time zone 'America/Sao_Paulo') <= 9 then 1
-        when extract(day from created_at at time zone 'America/Sao_Paulo') <= 19 then 2
+        when extract(day from timestamp_utc at time zone 'America/Sao_Paulo') <= 9 then 1
+        when extract(day from timestamp_utc at time zone 'America/Sao_Paulo') <= 19 then 2
         else 3
       end as band,
-      sum(amount_gross) as band_revenue
+      sum(amount) as band_revenue
     from sumup_transactions
     where org_id = target_org_id
-      and created_at >= ((now() at time zone 'America/Sao_Paulo')::date - interval '365 days')::timestamp
+      and timestamp_utc >= ((now() at time zone 'America/Sao_Paulo')::date - interval '365 days')::timestamp
     group by txn_year, txn_month, band
   ),
   month_totals as (
     select
-      extract(year from created_at at time zone 'America/Sao_Paulo') as txn_year,
-      extract(month from created_at at time zone 'America/Sao_Paulo') as txn_month,
-      sum(amount_gross) as month_revenue
+      extract(year from timestamp_utc at time zone 'America/Sao_Paulo') as txn_year,
+      extract(month from timestamp_utc at time zone 'America/Sao_Paulo') as txn_month,
+      sum(amount) as month_revenue
     from sumup_transactions
     where org_id = target_org_id
-      and created_at >= ((now() at time zone 'America/Sao_Paulo')::date - interval '365 days')::timestamp
+      and timestamp_utc >= ((now() at time zone 'America/Sao_Paulo')::date - interval '365 days')::timestamp
     group by txn_year, txn_month
   )
   select
@@ -231,27 +231,27 @@ begin
   )
   with event_data as (
     select
-      st.payment_type, st.card_type, st.nro_parcelas_modelo, st.entry_mode, st.payout_plan,
-      date_part('month', age(ste.due_date::date, st.created_at::date))::integer as months_to_receipt,
+      st.payment_type, st.card_type, st.installments_count, st.entry_mode, st.payout_plan,
+      date_part('month', age(ste.due_date::date, st.timestamp_utc::date))::integer as months_to_receipt,
       ste.amount as payout_amount,
       st.id as txn_id
     from sumup_transaction_events ste
     join sumup_transactions st on ste.transaction_id = st.id
     where st.org_id = target_org_id
-      and ste.event_status in ('SETTLED', 'PENDING')
-      and st.created_at >= v_window_start::timestamp
-      and st.created_at < (v_window_end + 1)::timestamp
+      and ste.status in ('SETTLED', 'PENDING')
+      and st.timestamp_utc >= v_window_start::timestamp
+      and st.timestamp_utc < (v_window_end + 1)::timestamp
   ),
   modality_totals as (
     select
-      payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan,
+      payment_type, card_type, installments_count, entry_mode, payout_plan,
       sum(payout_amount) as total_payout
     from event_data
-    group by payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan
+    group by payment_type, card_type, installments_count, entry_mode, payout_plan
   )
   select
     target_org_id,
-    ed.payment_type, ed.card_type, ed.nro_parcelas_modelo, ed.entry_mode, ed.payout_plan,
+    ed.payment_type, coalesce(ed.card_type, 'UNKNOWN') as card_type, ed.installments_count, coalesce(ed.entry_mode, 'UNKNOWN') as entry_mode, coalesce(ed.payout_plan, 'UNKNOWN') as payout_plan,
     coalesce(ed.months_to_receipt, 0),  -- NULL months = same month (0)
     sum(ed.payout_amount),
     count(distinct ed.txn_id),
@@ -267,14 +267,14 @@ begin
   join modality_totals mt on
     ed.payment_type = mt.payment_type
     and ed.card_type = mt.card_type
-    and ed.nro_parcelas_modelo = mt.nro_parcelas_modelo
+    and ed.installments_count = mt.installments_count
     and ed.entry_mode = mt.entry_mode
     and ed.payout_plan = mt.payout_plan
   group by
-    ed.payment_type, ed.card_type, ed.nro_parcelas_modelo, ed.entry_mode, ed.payout_plan,
+    ed.payment_type, ed.card_type, ed.installments_count, ed.entry_mode, ed.payout_plan,
     coalesce(ed.months_to_receipt, 0),
     mt.total_payout
-  on conflict (org_id, payment_type, card_type, nro_parcelas_modelo, entry_mode, payout_plan, meses_ate_receber)
+  on conflict (org_id, payment_type, card_type, installments_count, entry_mode, payout_plan, meses_ate_receber)
   do update set
     valor_recebido_historico = excluded.valor_recebido_historico,
     pct_recebimento_modalidade = excluded.pct_recebimento_modalidade,
