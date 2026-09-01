@@ -22,7 +22,7 @@ async function runLeg(leg: () => Promise<{ received: number }>): Promise<LegOutc
   }
 }
 
-export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental'): Promise<void> {
+export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean } = {}): Promise<void> {
   const runId = await startSyncRun(orgId, 'sumup')
 
   // The 24h incremental window is only ever applied on a manual trigger (there
@@ -45,7 +45,7 @@ export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental
   if (errors.length === 0) {
     try {
       await runReconciliation(orgId)
-      await refreshDerivedFinancialData(orgId)
+      if (options.refreshDerived !== false) await refreshDerivedFinancialData(orgId)
     } catch (error) {
       await finishSyncRun(runId, {
         status: 'failed',

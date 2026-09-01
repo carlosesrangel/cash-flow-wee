@@ -34,11 +34,12 @@ function parseArgs() {
   return {
     orgId: orgIndex >= 0 ? args[orgIndex + 1] : undefined,
     forcedMode: modeIndex >= 0 ? (args[modeIndex + 1] as 'initial' | 'incremental') : undefined,
+    skipDerivedRefresh: args.includes('--skip-derived-refresh'),
   }
 }
 
 async function main() {
-  const { orgId, forcedMode } = parseArgs()
+  const { orgId, forcedMode, skipDerivedRefresh } = parseArgs()
   const admin = createAdminSupabaseClient()
 
   let connections: Array<{ org_id: string }>
@@ -94,7 +95,7 @@ async function main() {
     console.log(`🔄 Sincronizando org ${conn.org_id} (modo: ${mode})...`)
     const startedAt = Date.now()
     try {
-      await runSumupSync(conn.org_id, mode)
+      await runSumupSync(conn.org_id, mode, { refreshDerived: !skipDerivedRefresh })
       const elapsedSec = Math.round((Date.now() - startedAt) / 1000)
       console.log(`✅ Concluído para ${conn.org_id} em ${elapsedSec}s\n`)
     } catch (error) {

@@ -53,9 +53,9 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode }}"
           if [ -z "$MODE" ]; then
-            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-olist-sync.ts
+            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-olist-sync.ts --skip-derived-refresh
           else
-            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-olist-sync.ts --mode "$MODE"
+            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-olist-sync.ts --mode "$MODE" --skip-derived-refresh
           fi
 
       - name: Verificar status de sync

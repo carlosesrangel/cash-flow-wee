@@ -9,7 +9,7 @@ import { syncAccountsReceivable } from '@/lib/olist/sync/accounts-receivable'
 import { runReconciliation } from '@/lib/reconciliation'
 import { refreshDerivedFinancialData } from '@/lib/sync/derived-refresh'
 
-export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental'): Promise<void> {
+export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean } = {}): Promise<void> {
   const runId = await startSyncRun(orgId, 'olist')
 
   const since = mode === 'incremental' ? new Date(Date.now() - 24 * 60 * 60 * 1000) : undefined
@@ -37,7 +37,7 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
     }
 
     await runReconciliation(orgId)
-    await refreshDerivedFinancialData(orgId)
+    if (options.refreshDerived !== false) await refreshDerivedFinancialData(orgId)
 
     await finishSyncRun(runId, {
       status: 'success',
