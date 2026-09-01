@@ -395,23 +395,28 @@ PARODY_ACTION:
 
 ## AUDIT FINDINGS
 
-### Hypothesis A CONFIRMED: payout.amount = GROSS
+### Current Status: PENDING_REAL_DATA_RECONCILIATION
 
-**Evidence**:
-1. SumUp API returns separate fields in payload: `amount` + `fee`
-2. Sync code (lib/sumup/sync/payouts.ts:54) stores both separately
-3. Transaction sync (lib/sumup/sync/transactions.ts:72,84) stores amount + fee_amount
-4. Power Query rule: Valor_Liquido = amount - fee (implies amount is GROSS)
-5. Ledger code attempts subtraction (fee from amount)
+**What was proven**:
+- Current code ASSUMES: payout.amount = GROSS
+- Evidence: sync mapping, schema design, Power Query formula
+- This proves CODE_ASSUMPTION, not SUMUP_API_SEMANTICS
 
-**Formula Confirmed**:
-```
-Gross Receivable = payout.amount
-Fee Charged = payout.fee
-Net Receivable = payout.amount - payout.fee
-```
+**What remains unproven**:
+- Actual SumUp API returns payout.amount as GROSS vs NET
+- Need real data reconciliation from existing transactions in database
+- Fixtures can reproduce code's assumption; they don't validate external API
 
-**Confidence**: A (HIGH) - API design pattern, code implementation, and Power Query rule all align
+**Preliminary Evidence** (CODE_ASSUMPTION, not API truth):
+1. Sync code stores amount + fee separately
+2. Power Query rule: Valor_Liquido = amount - fee
+3. This pattern suggests GROSS, but is still hypothesis
+
+**Action Required**:
+- Reconcile with real transactions already in database
+- Sample diverse transaction types: CARD 1X, parcelado, PIX, multiple payouts
+- Test hypotheses against actual settled transactions
+- Do NOT use fixtures; use production data already synced
 
 ### Classification
 
