@@ -30,8 +30,8 @@ async function testOlistAuth() {
     const missing = requiredVars.filter(v => !process.env[v])
     if (missing.length === 0) {
       console.log('✓ All required environment variables are set')
-      console.log('  OLIST_CLIENT_ID: ', process.env.OLIST_CLIENT_ID?.slice(0, 20) + '...')
-      console.log('  OLIST_REDIRECT_URI: ', process.env.OLIST_REDIRECT_URI)
+      console.log('  OLIST_CLIENT_ID = CONFIGURED')
+      console.log('  OLIST_REDIRECT_URI = CONFIGURED')
     } else {
       console.error('✗ Missing variables:', missing)
     }
@@ -53,10 +53,8 @@ async function testOlistAuth() {
         console.error('✗ Environment variable not set:', error.message)
       } else if (error.message.includes('401') || error.message.includes('invalid_client')) {
         console.log('✓ Environment variables are accessible (auth failed as expected with invalid code)')
-        console.log('  Error:', error.message.slice(0, 100) + '...')
       } else {
         console.log('⚠ Unexpected error (may indicate env var issue):')
-        console.log('  ', error.message.slice(0, 200))
       }
     }
     console.log()

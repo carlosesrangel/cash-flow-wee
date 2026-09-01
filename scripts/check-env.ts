@@ -33,10 +33,10 @@ function main() {
   for (const varName of required) {
     const value = process.env[varName]
     if (!value) {
-      console.error(`❌ MISSING: ${varName}`)
+      console.error(`❌ ${varName} = MISSING`)
       issues++
     } else {
-      console.log(`✅ ${varName}: ${value.substring(0, 20)}...`)
+      console.log(`✅ ${varName} = CONFIGURED`)
     }
   }
 
@@ -44,10 +44,10 @@ function main() {
   for (const varName of optional) {
     const value = process.env[varName]
     if (!value) {
-      console.warn(`⚠️  NOT SET: ${varName}`)
+      console.warn(`⚠️  ${varName} = NOT_CONFIGURED`)
       warnings++
     } else {
-      console.log(`✅ ${varName}: ${String(value).substring(0, 20)}...`)
+      console.log(`✅ ${varName} = CONFIGURED`)
     }
   }
 
