@@ -9,6 +9,13 @@ type PayableCategoryDetail = {
   dataLiquidacao?: string | null
 }
 
+type PayableCategoryCandidate = {
+  categoria: string | null
+  categoria_id: number | null
+  valor_pago: number | null
+  data_liquidacao: string | null
+}
+
 export type PayableCategoryBackfillResult = {
   processed: number
   updated: number
@@ -16,6 +23,29 @@ export type PayableCategoryBackfillResult = {
   not_found: number
   rate_limited: number
   errors: string[]
+}
+
+export function buildPayableCategoryUpdate(
+  payable: PayableCategoryCandidate,
+  detail: PayableCategoryDetail,
+): Record<string, unknown> {
+  const update: Record<string, unknown> = {}
+  const categoryDescription = detail.categoria?.descricao?.trim()
+
+  if (detail.categoria?.id !== undefined && detail.categoria.id !== payable.categoria_id) {
+    update.categoria_id = detail.categoria.id
+  }
+  if (categoryDescription && categoryDescription !== payable.categoria?.trim()) {
+    update.categoria = categoryDescription
+  }
+  if (detail.valorPago !== null && detail.valorPago !== undefined && detail.valorPago !== payable.valor_pago) {
+    update.valor_pago = detail.valorPago
+  }
+  if (detail.dataLiquidacao && detail.dataLiquidacao !== payable.data_liquidacao) {
+    update.data_liquidacao = detail.dataLiquidacao
+  }
+
+  return update
 }
 
 /**
@@ -37,11 +67,19 @@ export async function backfillPayableCategories(
     errors: [],
   }
 
-  const missing = await fetchAllPages<{ id: string; olist_id: number; categoria: string | null; synced_at: string | null }>(
+  const missing = await fetchAllPages<{
+    id: string
+    olist_id: number
+    categoria: string | null
+    categoria_id: number | null
+    valor_pago: number | null
+    data_liquidacao: string | null
+    synced_at: string | null
+  }>(
     (from, to) => {
       let query = admin
         .from('olist_accounts_payable')
-        .select('id, olist_id, categoria, synced_at')
+        .select('id, olist_id, categoria, categoria_id, valor_pago, data_liquidacao, synced_at')
         .eq('org_id', orgId)
         .or(options.watermark ? `categoria.is.null,categoria.eq.,synced_at.gt.${options.watermark}` : 'categoria.is.null,categoria.eq.')
         .range(from, to)
@@ -57,11 +95,7 @@ export async function backfillPayableCategories(
       result.processed += 1
       try {
         const detail = await olistFetch<PayableCategoryDetail>(orgId, `/contas-pagar/${payable.olist_id}`)
-        const update: Record<string, unknown> = {}
-        if (detail.categoria?.id !== undefined) update.categoria_id = detail.categoria.id
-        if (detail.categoria?.descricao?.trim()) update.categoria = detail.categoria.descricao.trim()
-        if (detail.valorPago !== null && detail.valorPago !== undefined) update.valor_pago = detail.valorPago
-        if (detail.dataLiquidacao) update.data_liquidacao = detail.dataLiquidacao
+        const update = buildPayableCategoryUpdate(payable, detail)
 
         if (Object.keys(update).length === 0) {
           result.already_complete += payable.categoria?.trim() ? 1 : 0
