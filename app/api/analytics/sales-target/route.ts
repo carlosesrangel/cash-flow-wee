@@ -20,5 +20,5 @@ export async function GET() {
   const target = Number(plans[0]?.amount ?? 0)
   const realized = monthOrders.reduce((sum, order) => sum + Number(order.valor_total_pedido ?? 0), 0)
   const availableDates = valid.map((order) => order.data_faturamento!.slice(0, 10)).sort()
-  return NextResponse.json({ month, target, realizedSales: Math.round(realized * 100) / 100, targetGap: Math.round((realized - target) * 100) / 100, achievementPercent: target > 0 ? Math.round((realized / target) * 10000) / 100 : null, billedThrough: availableDates.at(-1) ?? null, billedOrders: valid.length, billedOrdersThisMonth: monthOrders.length, source: 'Tiny/Olist data_faturamento' })
+  return NextResponse.json({ month, target, realizedSales: Math.round(realized * 100) / 100, targetGap: Math.round((target - realized) * 100) / 100, achievementPercent: target > 0 ? Math.round((realized / target) * 10000) / 100 : null, billedThrough: availableDates.at(-1) ?? null, billedOrders: valid.length, billedOrdersThisMonth: monthOrders.length, source: 'Tiny/Olist data_faturamento' })
 }
