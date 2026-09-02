@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import 'dotenv/config'
+import crypto from 'node:crypto'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { refreshTokens } from '@/lib/olist/oauth'
 
 const orgId = process.argv[2] ?? process.env.WEE_ORG_ID
+const fingerprint = (value: string | undefined) => value ? crypto.createHash('sha256').update(value).digest('hex').slice(0, 12) : null
 
 async function main() {
   if (!orgId) throw new Error('Informe o org_id como primeiro argumento ou WEE_ORG_ID')
@@ -18,6 +20,11 @@ async function main() {
 
   const accessExpired = !connection.expires_at || new Date(connection.expires_at).getTime() <= Date.now()
   const base = {
+    CLIENT_ID_CONFIGURED: Boolean(process.env.OLIST_CLIENT_ID),
+    CLIENT_SECRET_CONFIGURED: Boolean(process.env.OLIST_CLIENT_SECRET),
+    CLIENT_ID_FINGERPRINT: fingerprint(process.env.OLIST_CLIENT_ID),
+    CLIENT_SECRET_FINGERPRINT: fingerprint(process.env.OLIST_CLIENT_SECRET),
+    TOKEN_ENDPOINT: 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token',
     ACCESS_TOKEN_STATUS: accessExpired ? 'expired' : 'not_expired',
     ACCESS_TOKEN_EXPIRY: connection.expires_at,
     REFRESH_TOKEN_AVAILABLE: Boolean(connection.refresh_token),

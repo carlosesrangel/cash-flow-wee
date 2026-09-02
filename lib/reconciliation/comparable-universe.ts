@@ -66,7 +66,11 @@ function bucket(rows: Array<{ value: number }>): BridgeBucket {
 }
 
 export function buildComparableUniverseReport(tiny: ComparableTinyRow[], sumup: ComparableSumupRow[]): ComparableUniverseReport {
-  const tinyBounds = bounds(tiny.map((row) => row.date))
+  // The common window must be derived from the same semantic population that
+  // will be compared. Using PIX/cash or otherwise non-card Tiny rows to set
+  // the lower bound silently pulled unrelated SumUp card transactions into
+  // the reported universe.
+  const tinyBounds = bounds(tiny.filter((row) => isCardTiny(row.paymentMethod) && !isCancelled(row.status) && !isRefunded(row.status)).map((row) => row.date))
   const sumupBounds = bounds(sumup.filter(isSuccessfulSumup).map((row) => row.date))
   const comparableStart = tinyBounds.min && sumupBounds.min ? (tinyBounds.min > sumupBounds.min ? tinyBounds.min : sumupBounds.min) : null
   const comparableEnd = tinyBounds.max && sumupBounds.max ? (tinyBounds.max < sumupBounds.max ? tinyBounds.max : sumupBounds.max) : null
