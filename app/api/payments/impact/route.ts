@@ -11,7 +11,15 @@ const bodySchema = z.object({ apIds: z.array(z.string().uuid()) })
 export async function POST(request: NextRequest) {
   const member = await getCurrentMember()
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const body = bodySchema.safeParse(await request.json())
+
+  let payload: unknown
+  try {
+    payload = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const body = bodySchema.safeParse(payload)
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 })
 
   try {
