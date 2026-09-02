@@ -1,7 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, afterAll, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
 import { classifyPayableStatus } from '@/lib/payables/classify-status'
+
+vi.useFakeTimers()
+vi.setSystemTime(new Date('2026-09-01T12:00:00-03:00'))
 
 const BASE_ROW: AccountsPayableRow = {
   id: 'ap-1',
@@ -17,9 +20,9 @@ const BASE_ROW: AccountsPayableRow = {
   classification: { included: true, bucket: 'contratado', date: '2026-09-01' },
   agingBucket: '16-30',
 }
-
 describe('AccountsPayableTable', () => {
   afterEach(() => cleanup())
+  afterAll(() => vi.useRealTimers())
 
   it('shows a message when there are no rows', () => {
     render(<AccountsPayableTable rows={[]} today="2026-08-15" />)

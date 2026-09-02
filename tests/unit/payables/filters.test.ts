@@ -3,6 +3,8 @@ import { classifyPayableStatus } from '@/lib/payables/classify-status'
 import { calculatePayableTotals, getPayableStatusCounts, matchesPayableFilter, type PayableFilterRow } from '@/lib/payables/filters'
 
 const baseFilters = { status: 'all' as const, categoria: 'all', fornecedor: '', minValue: null, maxValue: null }
+vi.useFakeTimers()
+vi.setSystemTime(new Date('2026-09-01T12:00:00-03:00'))
 const status = (situacao: string, saldo: number | null, valor: number | null, date: string | null) => classifyPayableStatus(situacao, saldo, valor, date)
 
 const rows: PayableFilterRow[] = [

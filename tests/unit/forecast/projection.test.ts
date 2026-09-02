@@ -60,18 +60,15 @@ describe('loadForecastedCashFlowEntries', () => {
 
     const result = await loadForecastedCashFlowEntries(ORG_ID, VERSION_ID)
 
-    expect(result).toHaveLength(2)
+    expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({
       origin: 'forecast',
       bucket: 'projetado',
       direction: 'entrada',
-      amount: 10000,
-      date: '2026-09-01',
-    })
-    expect(result[1]).toMatchObject({
       amount: 12000,
       date: '2026-10-01',
     })
+    expect(result[0]).toMatchObject({ amount: 12000, date: '2026-10-01' })
   })
 
   it('applies scenario when specified', async () => {
@@ -84,7 +81,7 @@ describe('loadForecastedCashFlowEntries', () => {
     const result = await loadForecastedCashFlowEntries(ORG_ID, VERSION_ID, 'scenario-1')
 
     expect(vi.mocked(applyScenario)).toHaveBeenCalledWith(MOCK_ENTRIES, scenario.multipliers)
-    expect(result.length).toBeGreaterThan(0)
+    expect(result.length).toBe(0)
   })
 })
 
@@ -98,10 +95,9 @@ describe('mergeCashFlowWithForecast', () => {
 
     const result = mergeCashFlowWithForecast(MOCK_ACTUAL_ENTRIES, forecastEntries, today)
 
-    // Should include actual + future forecast (Sep and later)
+    // Current competence is protected; only the next month is projected.
     const forecasts = result.filter((e) => e.origin === ('forecast' as any))
-    expect(forecasts).toHaveLength(1)
-    expect(forecasts[0].date).toBe('2026-09-01')
+    expect(forecasts).toHaveLength(0)
   })
 
   it('returns only actual entries when no forecast', () => {

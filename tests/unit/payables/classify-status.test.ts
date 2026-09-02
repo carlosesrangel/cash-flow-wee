@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { classifyPayableStatus } from '@/lib/payables/classify-status'
 
 const TODAY = '2026-09-01'
@@ -18,6 +18,10 @@ function classify({
 }
 
 describe('classifyPayableStatus', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-01T12:00:00-03:00'))
+  })
   afterEach(() => vi.useRealTimers())
 
   it('uses the factual pago situation regardless of due date', () => {

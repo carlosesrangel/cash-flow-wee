@@ -119,18 +119,15 @@ describe('Simples Nacional Golden Dataset', () => {
     }
   })
 
-  it('2027 Reforma Tributária: Simples Tradicional with CBS/IBS', () => {
+  it('2027 Reforma Tributária: puro Simples has no estimated CBS/IBS premium', () => {
     // Scenario: 2027 with Simples Tradicional (CBS/IBS included in DAS)
     // Same RBT12 = 500.000 but with added CBS/IBS premium (~2.5%)
 
     const result2026 = calculateEffectiveSimplesTaxRate(500000, 2026)
     const result2027 = calculateEffectiveSimplesTaxRate(500000, 2027)
 
-    // 2027 rate should be higher due to CBS/IBS
-    expect(result2027.aliquota_efetiva).toBeGreaterThan(result2026.aliquota_efetiva)
-
-    // 2027 nominal increased by ~2.5% (CBS/IBS)
-    expect(result2027.aliquota_nominal).toBeCloseTo(result2026.aliquota_nominal + 0.025, 2)
+    expect(result2027.aliquota_efetiva).toBe(result2026.aliquota_efetiva)
+    expect(result2027.aliquota_nominal).toBe(result2026.aliquota_nominal)
   })
 
   it('Project Simples tax for competence month', () => {

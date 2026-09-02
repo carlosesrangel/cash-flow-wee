@@ -13,7 +13,7 @@ import { simulate2026vs2027 } from '@/lib/tax/simples-nacional'
  */
 
 describe('GD12: 2027 Tax Reform Scenario', () => {
-  it('2026 vs 2027 Tradicional: CBS/IBS added to DAS', () => {
+  it('2026 vs 2027 puro: CBS/IBS are not added as an estimated premium', () => {
     // SCENARIO: Service provider (Anexo III)
     // Revenue: R$ 500k
     // RBT12: R$ 2.5M
@@ -25,16 +25,10 @@ describe('GD12: 2027 Tax Reform Scenario', () => {
     // Faixa 5 for 2.5M: rate ≈ 10.8%
     const tax_2026 = resultado.year2026.simples
 
-    // 2027 Tradicional: Same rate + 2.5% CBS/IBS
-    // ~13.3% total
+    // 2027 pure Simples: CBS/IBS are integrated; no guessed premium.
     const tax_2027_tradicional = resultado.year2027Tradicional.simples
 
-    // 2027 should be higher due to CBS/IBS
-    expect(tax_2027_tradicional).toBeGreaterThan(tax_2026)
-
-    // Rough calculation: 500k * 1.025 increase = ~12.5k extra tax
-    const difference = tax_2027_tradicional - tax_2026
-    expect(difference).toBeGreaterThan(0)
+    expect(tax_2027_tradicional).toBe(tax_2026)
   })
 
   it('2027 Híbrido: CBS/IBS separate with credit mechanism', () => {
@@ -47,7 +41,7 @@ describe('GD12: 2027 Tax Reform Scenario', () => {
     const purchases = 600000
     const rbt12 = 8000000
 
-    const resultado = simulate2026vs2027(revenue, purchases, rbt12, 'anexo-i')
+    const resultado = simulate2026vs2027(revenue, purchases, rbt12, 'anexo-i', 0.8, { ibsRate: 0.001, cbsRate: 0.025 })
 
     // 2026 baseline
     const simples_2026 = resultado.year2026.simples
@@ -61,8 +55,8 @@ describe('GD12: 2027 Tax Reform Scenario', () => {
     const total_2027_hibrido = resultado.year2027Hibrido.total
     const credit_advantage = resultado.year2027Hibrido.creditAdvantage
 
-    // Simples should be lower in Híbrido (no CBS/IBS premium)
-    expect(simples_2027_hibrido).toBeLessThan(simples_2027_tradicional)
+    // Without an estimated premium, both Simples components use the same table.
+    expect(simples_2027_hibrido).toBe(simples_2027_tradicional)
 
     // Híbrido has CBS/IBS outside with credits
     expect(ibscbs_2027_hibrido).toBeGreaterThanOrEqual(0)
@@ -119,7 +113,7 @@ describe('GD12: 2027 Tax Reform Scenario', () => {
       {
         date: '2026-09-30',
         event: 'Deadline to choose 2027 regime',
-        options: ['SIMPLES_TRADICIONAL', 'SIMPLES_HIBRIDO'],
+        options: ['SIMPLES_NACIONAL_PURO', 'SIMPLES_HIBRIDO'],
       },
       {
         date: '2027-01-01',
@@ -129,7 +123,7 @@ describe('GD12: 2027 Tax Reform Scenario', () => {
     ]
 
     // Decision impacts entire 2027 and beyond
-    expect(timeline[0].options).toContain('SIMPLES_TRADICIONAL')
+    expect(timeline[0].options).toContain('SIMPLES_NACIONAL_PURO')
     expect(timeline[1].consequences).toContain('Regime choice locked in')
     expect(timeline[1].consequences).toContain('Cash basis accounting ends')
   })
