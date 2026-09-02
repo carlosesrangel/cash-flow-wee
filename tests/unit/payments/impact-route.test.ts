@@ -22,7 +22,7 @@ describe('POST /api/payments/impact', () => {
     vi.mocked(getCurrentMember).mockResolvedValue(null)
 
     const { POST } = await import('@/app/api/payments/impact/route')
-    const response = await POST(new Request('http://localhost/api/payments/impact', { method: 'POST' }))
+    const response = await POST(new Request('http://localhost/api/payments/impact', { method: 'POST' }) as never)
 
     expect(response.status).toBe(401)
   })
@@ -37,7 +37,7 @@ describe('POST /api/payments/impact', () => {
     })
 
     const { POST } = await import('@/app/api/payments/impact/route')
-    const response = await POST(request)
+    const response = await POST(request as never)
     const body = await response.json()
 
     expect(response.status).toBe(400)
