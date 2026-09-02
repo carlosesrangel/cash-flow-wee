@@ -161,6 +161,8 @@ describe('loadCashFlowEntries', () => {
       linkedRows: [
         {
           olist_accounts_receivable_id: 'ar-1',
+          status: 'reconciliado_automaticamente',
+          match_reason: { v2_classification: 'VERIFIED_COMPOSITE' },
           sumup_transaction_events: { due_date: '2026-08-28' },
         },
       ],
