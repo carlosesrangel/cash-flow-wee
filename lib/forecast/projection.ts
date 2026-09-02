@@ -1,6 +1,11 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { loadAllVersions, loadVersionEntries, loadScenarios } from '@/lib/forecast/engine'
 import { applyScenario } from '@/lib/forecast/scenarios'
+import { firstDayOfNextMonth } from '@/lib/forecast/cutoff'
+import { loadCanonicalPlan, loadScenarioConfig } from '@/lib/planning/canonical-repository'
+import { applyScenarioToPlan } from '@/lib/planning/canonical'
+import { transformForecastToReceipts } from '@/lib/forecast/transform'
+import { toLocalDateParam } from '@/lib/integrations/date'
 import type { CashFlowEntry } from '@/lib/cash-flow/engine'
 import type { MonthlyValue } from '@/lib/forecast/scenarios'
 
@@ -61,10 +66,39 @@ export async function loadForecastedCashFlowEntries(
     amount: entry.value,
     direction: 'entrada' as const,
     bucket: 'projetado' as const,
-    description: `Forecast - ${entry.ano}/${String(entry.mes).padStart(2, '0')}`,
-  }))
+    description: 'Entrada projetada',
+  })).filter((entry) => entry.date >= firstDayOfNextMonth())
 
   return entries
+}
+
+/** Primary projection loader. Legacy versioned forecasts remain readable for audit only. */
+export async function loadCanonicalForecastedCashFlowEntries(
+  orgId: string,
+  scenario: 'base' | 'conservative' | 'optimistic' = 'base',
+  suppliedClient?: { from: (table: string) => any },
+): Promise<CashFlowEntry[]> {
+  const [plans, config] = await Promise.all([loadCanonicalPlan(orgId, undefined, undefined, suppliedClient), loadScenarioConfig(orgId, suppliedClient)])
+  const selected = applyScenarioToPlan(plans, scenario, config)
+  const futurePlans = selected.filter((plan) => plan.competenceMonth >= firstDayOfNextMonth())
+  if (futurePlans.length === 0) return []
+  const client = suppliedClient ?? createAdminSupabaseClient()
+  try {
+    const receipts = await transformForecastToReceipts(client, orgId, futurePlans.map((plan) => ({ ano: Number(plan.competenceMonth.slice(0, 4)), mes: Number(plan.competenceMonth.slice(5, 7)), value: plan.amount })))
+    return receipts.filter((receipt) => toLocalDateParam(receipt.data_recebimento) >= firstDayOfNextMonth()).map((receipt, index) => ({
+      id: `canonical-receipt-${receipt.data_venda.toISOString()}-${index}`,
+      origin: 'forecast' as const,
+      sourceId: `monthly_sales_plan:${toLocalDateParam(receipt.data_venda).slice(0, 7)}`,
+      date: toLocalDateParam(receipt.data_recebimento),
+      amount: receipt.recebimento_liquido_projetado,
+      direction: 'entrada' as const,
+      bucket: 'projetado' as const,
+      description: `Entrada projetada · ${receipt.modalidade}`,
+    }))
+  } catch (error) {
+    console.warn('Forecast receipt projection unavailable without factual mix/profile:', error)
+    return []
+  }
 }
 
 /**
@@ -77,18 +111,11 @@ export function mergeCashFlowWithForecast(
   forecastEntries: CashFlowEntry[],
   today: { ano: number; mes: number }
 ): CashFlowEntry[] {
-  // Find the latest actual transaction date
-  const actualDates = actualEntries.map((e) => e.date).filter((d) => d)
-  const latestActualDate = actualDates.length > 0 ? new Date(Math.max(...actualDates.map((d) => new Date(d).getTime()))) : null
-
-  // Filter forecast to only include future months
+  // Never show projected values in the current or a previous local month.
   const futureForecasts = forecastEntries.filter((f) => {
     if (!f.date) return false
-    const [ano, mes] = f.date.split('-').map(Number)
-    // Include if after today or if today's month
-    if (ano > today.ano) return true
-    if (ano === today.ano && mes >= today.mes) return true
-    return false
+    const nextMonth = today.mes === 12 ? { ano: today.ano + 1, mes: 1 } : { ano: today.ano, mes: today.mes + 1 }
+    return f.date >= `${nextMonth.ano}-${String(nextMonth.mes).padStart(2, '0')}-01`
   })
 
   // Combine (actual first, then future forecast)

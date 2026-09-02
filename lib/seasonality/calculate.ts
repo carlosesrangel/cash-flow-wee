@@ -16,7 +16,7 @@
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
-type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+type AdminClient = { from: (table: string) => any }
 
 export type SeasonalityBand = 1 | 2 | 3
 
@@ -146,7 +146,7 @@ export async function getSeasonalityWeight(
     .eq('faixa', banda)
 
   if (globalData && globalData.length > 0) {
-    const avgPeso = globalData.reduce((sum, row) => sum + (row.peso_faixa || 0), 0) / globalData.length
+    const avgPeso = globalData.reduce((sum: number, row: any) => sum + (row.peso_faixa || 0), 0) / globalData.length
     if (avgPeso > 0) {
       return {
         faixa: banda,

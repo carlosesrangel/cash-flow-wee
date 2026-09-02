@@ -12,7 +12,7 @@
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
-type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+type AdminClient = { from: (table: string) => any }
 type ReceiptProfileRow = any
 
 export type ReceiptDistribution = {

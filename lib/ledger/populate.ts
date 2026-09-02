@@ -9,6 +9,10 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/reconciliation/run'
+import { firstDayOfNextMonth } from '@/lib/forecast/cutoff'
+import { calculateProjectedCmv } from '@/lib/planning/canonical'
+import { calculateEffectiveSimplesTaxRate } from '@/lib/tax/simples-nacional'
+import { taxPaymentDate } from '@/lib/tax/engine'
 
 export interface LedgerEntry {
   org_id: string
@@ -235,11 +239,12 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       data_liquidacao: string | null
       historico: string | null
       numero_documento: string | null
+      forma_recebimento_nome: string | null
     }>(
       (from, to) =>
         admin
           .from('olist_accounts_receivable')
-          .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico, numero_documento')
+          .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico, numero_documento, forma_recebimento_nome')
           .eq('org_id', orgId)
           .range(from, to),
       'Failed to load olist_accounts_receivable for ledger'
@@ -282,6 +287,9 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
     const derivedPaid = hasKnownValue && hasKnownBalance ? Math.max(value - balance, 0) : null
     const match = matchByReceivableId.get(receivable.id)
     const resolved = match?.status === 'reconciliado_automaticamente' || match?.status === 'reconciliado_manualmente'
+    const paymentMethod = String(receivable.forma_recebimento_nome || '').trim().toLowerCase()
+    const isPix = paymentMethod.includes('pix')
+    const isCash = paymentMethod.includes('dinheiro') || paymentMethod.includes('espécie') || paymentMethod.includes('especie')
     // In this integration, a resolved reconciliation is the authoritative
     // settlement signal. The Olist detail field can remain `0`/the original
     // balance because the payment is confirmed by SumUp, so a zero-valued
@@ -299,9 +307,35 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       saldo: receivable.saldo,
       valor_pago: receivable.valor_pago,
       reconciliation_status: match?.status ?? 'nao_reconciliado',
+      payment_method: receivable.forma_recebimento_nome,
     }
 
-    if (resolved && factualPaid !== null && factualPaid > 0) {
+    // PIX and cash are factual Tiny settlements, independent from SumUp.
+    // The source AR row is the only cash event for these payment methods.
+    if ((isPix || isCash) && hasKnownValue) {
+      entries.push({
+        org_id: orgId,
+        event_date: receivable.data_emissao || dueDate,
+        competence_date: receivable.data_emissao || dueDate,
+        amount: value,
+        direction: 'entrada',
+        nature: isPix ? 'TINY_PIX_ACTUAL' : 'TINY_CASH_ACTUAL',
+        source: 'tiny',
+        source_id: receivable.id,
+        status: 'actual',
+        description: isPix ? 'Recebimento PIX' : 'Recebimento em dinheiro',
+        metadata,
+      })
+      continue
+    }
+
+    // For cards, SumUp is the financial source. The matched Tiny AR row is
+    // deliberately not materialized as a second actual cash movement.
+    if (resolved) {
+      continue
+    }
+
+    if (factualPaid !== null && factualPaid > 0) {
       entries.push({
         org_id: orgId,
         event_date: receivable.data_liquidacao || event?.due_date || event?.event_date || dueDate,
@@ -318,7 +352,7 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       })
     }
 
-    if (!resolved && hasKnownBalance && balance > 0) {
+    if (hasKnownBalance && balance > 0) {
       entries.push({
         org_id: orgId,
         event_date: dueDate,
@@ -378,38 +412,28 @@ export async function populateLedgerFromManualEntries(admin: SupabaseClient, org
  * Populate ledger from forecast projections
  */
 export async function populateLedgerFromForecast(admin: SupabaseClient, orgId: string) {
-  // Load forecast entries (future revenue projections)
-  const { data: forecast, error } = await admin
-    .from('forecast_entries')
-    .select('id, ano, mes, receita, forecast_versions!inner(org_id)')
-    .eq('forecast_versions.org_id', orgId)
-    .gte('ano', new Date().getFullYear())
-
-  if (error) {
-    throw error
-  }
-
+  const { data: plan, error } = await admin.from('monthly_sales_plan').select('id, competence_month, amount').eq('org_id', orgId).gte('competence_month', firstDayOfNextMonth()).order('competence_month')
+  if (error) throw error
   const entries: LedgerEntry[] = []
-  for (const entry of forecast || []) {
-    const date = new Date(entry.ano, entry.mes - 1, 1).toISOString().split('T')[0]
-
+  for (const entry of plan || []) {
+    const date = String(entry.competence_month)
+    const [ano, mes] = date.slice(0, 7).split('-').map(Number)
+    const cmv = calculateProjectedCmv(Number(entry.amount) || 0, date)
     entries.push({
       org_id: orgId,
       event_date: date,
       competence_date: date,
-      amount: entry.receita || 0,
+      amount: Number(entry.amount) || 0,
       direction: 'entrada',
       nature: 'FORECAST_REVENUE_PROJECTION',
       source: 'forecast',
       source_id: entry.id,
       status: 'projected',
-      description: `Forecast revenue: ${entry.ano}-${String(entry.mes).padStart(2, '0')}`,
-      metadata: {
-        forecast_id: entry.id,
-        ano: entry.ano,
-        mes: entry.mes,
-      },
+      description: 'Entrada projetada',
+      metadata: { plan_id: entry.id, ano, mes, categoria: 'Receita projetada', source_of_truth: 'monthly_sales_plan' },
     })
+    entries.push({ org_id: orgId, event_date: `${date.slice(0, 7)}-01`, competence_date: date, amount: cmv.day1, direction: 'saida', nature: 'PROJECTED_CMV', source: 'forecast', source_id: `${entry.id}:cmv:01`, status: 'projected', description: 'CMV projetado', metadata: { plan_id: entry.id, categoria: 'CMV', formula: 'receita / 3.1 * 1.1', parcela: '1/2' } })
+    entries.push({ org_id: orgId, event_date: `${date.slice(0, 7)}-15`, competence_date: date, amount: cmv.day15, direction: 'saida', nature: 'PROJECTED_CMV', source: 'forecast', source_id: `${entry.id}:cmv:15`, status: 'projected', description: 'CMV projetado', metadata: { plan_id: entry.id, categoria: 'CMV', formula: 'receita / 3.1 * 1.1', parcela: '2/2' } })
   }
 
   return entries
@@ -434,32 +458,43 @@ export async function populateLedgerFromTaxes(admin: SupabaseClient, orgId: stri
     return [] // No tax projection data yet
   }
 
-  // For now, project Simples Nacional based on forecast
-  const { data: forecast } = await admin
-    .from('forecast_entries')
-    .select('ano, mes, receita, forecast_versions!inner(org_id)')
-    .eq('forecast_versions.org_id', orgId)
+  const { data: forecast, error: forecastError } = await admin
+    .from('monthly_sales_plan')
+    .select('id, competence_month, amount')
+    .eq('org_id', orgId)
+    .gte('competence_month', firstDayOfNextMonth())
+    .order('competence_month')
+  if (forecastError) throw forecastError
 
   const entries: LedgerEntry[] = []
   for (const entry of forecast || []) {
-    // Monthly tax liability
-    const vencimento = new Date(entry.ano, entry.mes, 20).toISOString().split('T')[0]
-    const amount = (entry.receita || 0) * 0.105 // ~10.5% effective Simples rate (varies)
+    const competence = String(entry.competence_month)
+    const ano = Number(competence.slice(0, 4)); const mes = Number(competence.slice(5, 7))
+    const amountRevenue = Number(entry.amount) || 0
+    const { data: history } = await admin.from('monthly_sales_plan').select('competence_month, amount').eq('org_id', orgId).gte('competence_month', `${ano - 1}-${String(mes).padStart(2, '0')}-01`).lt('competence_month', competence).order('competence_month')
+    const rbt12 = (history || []).reduce((sum: number, row: { amount: number | null }) => sum + Number(row.amount || 0), 0)
+    const taxInfo = calculateEffectiveSimplesTaxRate(rbt12, ano)
+    const amount = Math.round(amountRevenue * taxInfo.aliquota_efetiva * 100) / 100
 
     entries.push({
       org_id: orgId,
-      event_date: vencimento,
-      competence_date: new Date(entry.ano, entry.mes - 1, 1).toISOString().split('T')[0],
+      event_date: taxPaymentDate(ano, mes),
+      competence_date: competence,
       amount,
       direction: 'saida',
       nature: 'SIMPLES_NACIONAL_TAX',
       source: 'tax',
       status: 'projected',
-      description: `Simples Nacional tax due: ${entry.ano}-${String(entry.mes).padStart(2, '0')}`,
+      description: 'Imposto projetado',
       metadata: {
-        mes: entry.mes,
-        ano: entry.ano,
-        revenue_base: entry.receita,
+        mes,
+        ano,
+        revenue_base: amountRevenue,
+        rbt12,
+        aliquota_nominal: taxInfo.aliquota_nominal,
+        parcela_deduzir: taxInfo.parcela_deduzir,
+        faixa: taxInfo.faixa,
+        regime_2027: 'SIMPLES_NACIONAL_PURO',
       },
     })
   }

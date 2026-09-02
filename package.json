@@ -21,6 +21,7 @@
     "seed:forecast": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast.ts",
     "seed:forecast:60months": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast-60months.ts",
     "seed:payment-scenarios": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-payment-scenarios.ts",
+    "import:planning": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/import-planning-workbook.ts",
     "apply:migrations": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/apply-migrations.ts",
     "check:env": "tsx -r dotenv/config scripts/check-env.ts"
   },
@@ -41,6 +42,7 @@
     "shadcn": "^4.17.0",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

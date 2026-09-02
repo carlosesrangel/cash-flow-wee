@@ -11,7 +11,7 @@
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
-type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+type AdminClient = { from: (table: string) => any }
 
 export type FeeRateRow = any
 
@@ -136,7 +136,7 @@ export async function getFeeRateFallback(
     .filter('qtd_com_fee', 'gte', 5)
 
   if (tier2Records && tier2Records.length > 0) {
-    const avgRate = tier2Records.reduce((sum, r) => sum + (r.taxa_media_ponderada || 0), 0) / tier2Records.length
+    const avgRate = tier2Records.reduce((sum: number, r: any) => sum + (r.taxa_media_ponderada || 0), 0) / tier2Records.length
     return {
       taxaMediaPonderada: avgRate,
       fonte: 'MODALIDADE_E_PARCELAS',
@@ -153,7 +153,7 @@ export async function getFeeRateFallback(
     .filter('qtd_com_fee', 'gte', 5)
 
   if (tier3Records && tier3Records.length > 0) {
-    const avgRate = tier3Records.reduce((sum, r) => sum + (r.taxa_media_ponderada || 0), 0) / tier3Records.length
+    const avgRate = tier3Records.reduce((sum: number, r: any) => sum + (r.taxa_media_ponderada || 0), 0) / tier3Records.length
     return {
       taxaMediaPonderada: avgRate,
       fonte: 'MODALIDADE',
@@ -168,7 +168,7 @@ export async function getFeeRateFallback(
     .eq('org_id', orgId)
 
   if (tier4 && tier4.length > 0) {
-    const globalRate = tier4.reduce((sum, r) => sum + (r.taxa_media_ponderada || 0), 0) / tier4.length
+    const globalRate = tier4.reduce((sum: number, r: any) => sum + (r.taxa_media_ponderada || 0), 0) / tier4.length
     return {
       taxaMediaPonderada: globalRate || 0,
       fonte: 'TAXA_GLOBAL',

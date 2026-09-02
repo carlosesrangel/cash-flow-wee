@@ -21,7 +21,7 @@ import { getFeeRateFallback } from '@/lib/fees/calculate'
 import { applyReceiptProfile, validateReceiptProfileInvariant } from '@/lib/receipt-profile/calculate'
 import type { MonthlyValue } from '@/lib/forecast/scenarios'
 
-type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+type AdminClient = { from: (table: string) => any }
 
 export type PaymentModality = {
   payment_type: string
@@ -71,10 +71,10 @@ export async function getPaymentMix(
   }
 
   // Normalize participacao
-  const totalPct = feeRates.reduce((sum, row) => sum + (row.pct_valor_12m || 0), 0)
+  const totalPct = feeRates.reduce((sum: number, row: any) => sum + (row.pct_valor_12m || 0), 0)
   if (totalPct === 0) return []
 
-  return feeRates.map((row) => ({
+  return feeRates.map((row: any) => ({
     payment_type: row.payment_type,
     card_type: row.card_type,
     nro_parcelas_modelo: row.nro_parcelas_modelo,

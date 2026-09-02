@@ -21,6 +21,8 @@ const MIGRATIONS = [
   '0020_extended_planning.sql',
   '0021_projected_ar_rpc.sql',
   '0022_tax_configuration.sql',
+  '0031_canonical_planning_and_ledger_lineage.sql',
+  '0032_rfv_order_source.sql',
 ]
 
 async function applyMigrations() {

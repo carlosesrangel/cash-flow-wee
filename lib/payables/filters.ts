@@ -20,6 +20,8 @@ export type PayableFilterState = {
   fornecedor: string
   minValue: number | null
   maxValue: number | null
+  dateFrom?: string
+  dateTo?: string
 }
 
 export type PayableTotals = {
@@ -44,6 +46,8 @@ export function matchesPayableFilter(row: PayableFilterRow, filters: PayableFilt
     return false
   }
   if (filters.fornecedor && row.fornecedorNome !== filters.fornecedor) return false
+  if (filters.dateFrom && (!row.dataVencimento || row.dataVencimento < filters.dateFrom)) return false
+  if (filters.dateTo && (!row.dataVencimento || row.dataVencimento > filters.dateTo)) return false
 
   const value = knownNumber(row.valor)
   if (filters.minValue !== null && (value === null || value < filters.minValue)) return false

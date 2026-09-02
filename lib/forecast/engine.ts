@@ -124,28 +124,16 @@ export async function createForecastVersion(orgId: string, name: string, actorPr
   const versions = await loadAllVersions(orgId)
   const current = versions[0]
 
+  // Legacy API compatibility: the application now has one canonical plan in
+  // monthly_sales_plan. Never create a second active planning version.
+  if (current) return current
+
   const { data: version, error: versionError } = await admin
     .from('forecast_versions')
     .insert({ org_id: orgId, name, created_by: actorProfileId })
     .select('id, name, created_at')
     .single()
   if (versionError) throw new Error(`Failed to create forecast_versions: ${versionError.message}`)
-
-  if (current) {
-    const entries = await loadVersionEntries(orgId, current.id)
-    if (entries.length > 0) {
-      const { error: copyError } = await admin.from('forecast_entries').insert(
-        entries.map((e) => ({
-          version_id: version.id,
-          ano: e.ano,
-          mes: e.mes,
-          receita: e.value,
-          updated_by: actorProfileId,
-        }))
-      )
-      if (copyError) throw new Error(`Failed to copy forecast_entries: ${copyError.message}`)
-    }
-  }
 
   return { id: version.id, name: version.name, createdAt: version.created_at }
 }

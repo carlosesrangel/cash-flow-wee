@@ -30,6 +30,7 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
         .select('id, source, source_id, event_date, amount, direction, status, nature, description')
         .eq('org_id', orgId)
         .in('status', ['actual', 'scheduled', 'projected'])
+        .is('superseded_at', null)
         .range(from, to),
     'Failed to load canonical financial_ledger read model'
   )

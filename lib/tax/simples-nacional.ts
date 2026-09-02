@@ -10,7 +10,7 @@
  */
 
 export type SimplesAnexo = 'anexo-i' | 'anexo-ii' | 'anexo-iii' | 'anexo-iv' | 'anexo-v'
-export type Simples2027Regime = 'simples-tradicional' | 'simples-hibrido'
+export type Simples2027Regime = 'simples-nacional-puro' | 'simples-tradicional' | 'simples-hibrido'
 
 export const SIMPLES_ANEXOS: Record<SimplesAnexo, string> = {
   'anexo-i': 'Comércio',
@@ -77,71 +77,24 @@ export const SIMPLES_RATES_2026: Record<SimplesAnexo, Record<string, number>> = 
 }
 
 /**
- * 2027 Tax Reform: Simples Tradicional (CBS/IBS within DAS, no credits)
- * Uses 2026 rates + CBS/IBS premium (estimated 2.5%)
+ * 2027 pure Simples uses the applicable Simples table. CBS/IBS are within
+ * the unified collection; they are not added as an estimated extra rate.
  */
 export const SIMPLES_RATES_2027_TRADICIONAL: Record<SimplesAnexo, Record<string, number>> = {
-  'anexo-i': {
-    '180000': 0.0650, // 4.0% + 2.5% CBS/IBS
-    '360000': 0.0797,
-    '540000': 0.0934,
-    '720000': 0.1000,
-    '900000': 0.1066,
-    '1080000': 0.1132,
-    '1260000': 0.1177,
-    '1500000': 0.1223,
-  },
-  'anexo-ii': {
-    '180000': 0.0700,
-    '360000': 0.0847,
-    '540000': 0.0984,
-    '720000': 0.1050,
-    '900000': 0.1116,
-    '1080000': 0.1182,
-    '1260000': 0.1227,
-    '1500000': 0.1273,
-  },
-  'anexo-iii': {
-    '180000': 0.0850,
-    '360000': 0.0980,
-    '540000': 0.1070,
-    '720000': 0.1145,
-    '900000': 0.1160,
-    '1080000': 0.1175,
-    '1260000': 0.1190,
-    '1500000': 0.1205,
-  },
-  'anexo-iv': {
-    '180000': 0.0900,
-    '360000': 0.1030,
-    '540000': 0.1120,
-    '720000': 0.1195,
-    '900000': 0.1210,
-    '1080000': 0.1225,
-    '1260000': 0.1240,
-    '1500000': 0.1255,
-  },
-  'anexo-v': {
-    '180000': 0.0800,
-    '360000': 0.0930,
-    '540000': 0.1020,
-    '720000': 0.1095,
-    '900000': 0.1110,
-    '1080000': 0.1125,
-    '1260000': 0.1140,
-    '1500000': 0.1155,
-  },
+  'anexo-i': SIMPLES_RATES_2026['anexo-i'],
+  'anexo-ii': SIMPLES_RATES_2026['anexo-ii'],
+  'anexo-iii': SIMPLES_RATES_2026['anexo-iii'],
+  'anexo-iv': SIMPLES_RATES_2026['anexo-iv'],
+  'anexo-v': SIMPLES_RATES_2026['anexo-v'],
 }
 
 /**
  * 2027 Tax Reform Constants
  */
 export const REFORM_2027 = {
-  IBS_RATE: 0.001, // 0.1% transição em 2027
-  CBS_RATE: 0.025, // Estimated ~2.5% (será regulamentado)
-  DECISION_DEADLINE: '2026-09-30', // Deadline para escolher regime
+  REGIME: 'SIMPLES_NACIONAL_PURO' as const,
+  DECISION_DEADLINE: '2026-09-30',
   EFFECTIVE_DATE: '2027-01-01', // Quando entra em vigor
-  CASH_BASIS_END_DATE: '2027-01-01', // Fim do regime de caixa
 }
 
 /**
@@ -162,7 +115,7 @@ export function getSimplesTaxRate(
     // Use 2026 base rate (CBS/IBS removed conceptually)
     rates = SIMPLES_RATES_2026[anexo]
   } else {
-    // Simples Tradicional: 2026 rate + CBS/IBS premium
+    // Simples Nacional puro/tradicional: no estimated CBS/IBS premium.
     rates = SIMPLES_RATES_2027_TRADICIONAL[anexo]
   }
 
@@ -184,10 +137,11 @@ export function getSimplesTaxRate(
 export function calculateIbsCbsHibrido(
   revenue: number,
   purchases: number,
-  eligiblePurchasesPercentage: number = 0.8 // 80% of purchases have eligible IBS/CBS credits
+  eligiblePurchasesPercentage: number = 0,
+  rates: { ibsRate: number; cbsRate: number } = { ibsRate: 0, cbsRate: 0 }
 ): { ibs: number; cbs: number; creditableAmount: number; netTax: number } {
-  const ibsRate = REFORM_2027.IBS_RATE
-  const cbsRate = REFORM_2027.CBS_RATE
+  const ibsRate = rates.ibsRate
+  const cbsRate = rates.cbsRate
 
   // Débito (sales)
   const ibsDebit = revenue * ibsRate
@@ -214,7 +168,8 @@ export function simulate2026vs2027(
   purchases: number,
   rbt12: number,
   anexo: SimplesAnexo = 'anexo-iii',
-  eligibleCreditPercentage: number = 0.8
+  eligibleCreditPercentage: number = 0,
+  rates: { ibsRate: number; cbsRate: number } = { ibsRate: 0, cbsRate: 0 }
 ): {
   year2026: { simples: number; total: number }
   year2027Tradicional: { simples: number; ibsCbs: number; total: number }
@@ -231,7 +186,7 @@ export function simulate2026vs2027(
   // 2027 Híbrido: Simples without CBS/IBS + separate IBS/CBS calculation
   const rate2027Hibrido = getSimplesTaxRate(rbt12, anexo, 2027, 'simples-hibrido')
   const simplePart = revenue * rate2027Hibrido
-  const ibsCbsPart = calculateIbsCbsHibrido(revenue, purchases, eligibleCreditPercentage)
+  const ibsCbsPart = calculateIbsCbsHibrido(revenue, purchases, eligibleCreditPercentage, rates)
 
   return {
     year2026: {
@@ -344,42 +299,43 @@ const SIMPLES_TABLE_2026: SimplesTableEntry[] = [
   },
 ]
 
-// 2027: Simples Tradicional (with CBS/IBS added)
+// 2027: Simples Nacional puro. The law changes the tax composition and
+// reporting, not a guessed percentage that can be safely hardcoded here.
 const SIMPLES_TABLE_2027_TRADICIONAL: SimplesTableEntry[] = [
   {
     limit: 180000,
     label: 'Faixa 1',
-    aliquota_nominal: 0.065, // 4% + 2.5% CBS/IBS
+    aliquota_nominal: 0.04,
     parcela_deduzir: 0,
   },
   {
     limit: 360000,
     label: 'Faixa 2',
-    aliquota_nominal: 0.0973,
+    aliquota_nominal: 0.073,
     parcela_deduzir: 5940,
   },
   {
     limit: 720000,
     label: 'Faixa 3',
-    aliquota_nominal: 0.1195,
+    aliquota_nominal: 0.095,
     parcela_deduzir: 13860,
   },
   {
     limit: 1800000,
     label: 'Faixa 4',
-    aliquota_nominal: 0.132,
+    aliquota_nominal: 0.107,
     parcela_deduzir: 22500,
   },
   {
     limit: 3600000,
     label: 'Faixa 5',
-    aliquota_nominal: 0.168,
+    aliquota_nominal: 0.143,
     parcela_deduzir: 87300,
   },
   {
     limit: 4800000,
     label: 'Faixa 6',
-    aliquota_nominal: 0.215,
+    aliquota_nominal: 0.19,
     parcela_deduzir: 378000,
   },
   {
@@ -456,7 +412,8 @@ export function calculateEffectiveSimplesTaxRate(
 export function projectSimplesTax(
   receita_competencia: number,
   rbt12: number,
-  year: number = 2026
+  year: number = 2026,
+  competenceMonth = 1,
 ): {
   imposto_simples_projetado: number
   aliquota_efetiva: number
@@ -474,8 +431,8 @@ export function projectSimplesTax(
     aliquota_efetiva: taxInfo.aliquota_efetiva,
     rbt12,
     faixa: taxInfo.faixa,
-    data_vencimento: new Date(year, 0, 20), // placeholder, should be M+1 month 20th
-    competence_month: 1, // placeholder
+    data_vencimento: new Date(Date.UTC(year, competenceMonth, 20)),
+    competence_month: competenceMonth,
     competence_year: year,
   }
 }
