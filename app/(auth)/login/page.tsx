@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { loginSchema } from '@/lib/validation/auth'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -30,11 +32,10 @@ export default function LoginPage() {
       return
     }
 
-    // The browser client persists the Supabase session in cookies. A full
-    // navigation makes the next request carry those cookies through proxy
-    // and the server component tree, avoiding a concurrent push/refresh RSC
-    // request while the auth state is still being persisted.
-    window.location.assign('/visao-geral')
+    // Do not refresh concurrently with the navigation: the browser client
+    // persists the session before replace, and proxy/server components then
+    // receive the same auth cookies on the next request.
+    router.replace('/visao-geral')
   }
 
   return (
