@@ -1,6 +1,7 @@
 import { getCurrentMember } from '@/lib/auth/session'
-import { loadCashFlowEntries, buildCashFlowDays } from '@/lib/cash-flow/engine'
-import { loadForecastedCashFlowEntries, mergeCashFlowWithForecast } from '@/lib/forecast/projection'
+import { buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
+import { loadCanonicalForecastedCashFlowEntries, mergeCashFlowWithForecast } from '@/lib/forecast/projection'
 import { loadCashFlowWithPlannedPayments } from '@/lib/cash-flow/with-payments'
 import { aggregateByMonth } from '@/lib/cash-flow/aggregate'
 import { toLocalDateParam } from '@/lib/integrations/date'
@@ -8,6 +9,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { AnnualTable } from '@/components/cash-flow/annual-table'
 import { ForecastToggle } from '@/components/cash-flow/forecast-toggle'
 import { PaymentsToggle } from '@/components/cash-flow/payments-toggle'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export default async function FluxoDeCaixaAnualPage({
   searchParams,
@@ -27,11 +29,12 @@ export default async function FluxoDeCaixaAnualPage({
   const from = `${year}-01-01`
   const to = `${year}-12-31`
 
-  const actualEntries = await loadCashFlowEntries(member.orgId)
+  const actualEntries = (await loadCanonicalCashFlow(member.orgId)).filter((entry) => entry.description !== 'Entrada projetada')
+  const supabase = await createServerSupabaseClient()
 
   let entries = actualEntries
   if (showForecast) {
-    const forecastEntries = await loadForecastedCashFlowEntries(member.orgId)
+    const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
     const now = new Date()
     const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
     const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
@@ -41,7 +44,7 @@ export default async function FluxoDeCaixaAnualPage({
   if (showPayments) {
     entries = await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
     if (showForecast) {
-      const forecastEntries = await loadForecastedCashFlowEntries(member.orgId)
+      const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
       const now = new Date()
       const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
       const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }

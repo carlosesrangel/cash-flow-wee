@@ -104,6 +104,10 @@
   --chart-4: var(--status-positive);
   --chart-5: var(--status-critical);
   --radius: 0.375rem;
+  --ui-space: 1rem;
+  --ui-card-padding: 1.25rem;
+  --ui-control-height: 2.5rem;
+  --ui-table-row-height: 3.25rem;
   --sidebar: var(--brand-parchment);
   --sidebar-foreground: var(--brand-ink);
   --sidebar-primary: var(--brand-navy);

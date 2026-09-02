@@ -30,7 +30,7 @@ function MetricCard({
 
   return (
     <Card className={cn('', className)} {...props}>
-      <CardContent className="flex items-start justify-between">
+      <CardContent className="flex min-h-[132px] items-start justify-between p-5">
         <div className="flex-1">
           <p className="font-mono text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">
             {label}

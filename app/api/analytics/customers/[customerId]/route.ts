@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentMember } from '@/lib/auth/session'
-import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ customerId: string }> }) {
   const member = await getCurrentMember()
@@ -10,7 +10,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!Number.isInteger(olistCustomerId)) return NextResponse.json({ error: 'Invalid customer id' }, { status: 400 })
 
   try {
-    const admin = createAdminSupabaseClient()
+    const admin = await createServerSupabaseClient()
     const [{ data: contact }, { data: orders, error: ordersError }] = await Promise.all([
       admin.from('olist_contacts').select('nome, email, telefone, celular, cpf_cnpj, endereco').eq('org_id', member.orgId).eq('olist_id', olistCustomerId).maybeSingle(),
       admin.from('olist_orders').select('id, numero_pedido, data, situacao, cliente_olist_id, valor_total_pedido').eq('org_id', member.orgId).eq('cliente_olist_id', olistCustomerId).order('data', { ascending: false }),

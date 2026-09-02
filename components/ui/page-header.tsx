@@ -12,7 +12,7 @@ const PageHeader = React.forwardRef<
 >(({ className, title, subtitle, description, action, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between', className)}
+    className={cn('mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between', className)}
     {...props}
   >
     <div className="flex-1">

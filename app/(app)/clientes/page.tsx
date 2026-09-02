@@ -5,6 +5,7 @@ import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
 import type { CustomerMetric } from '@/lib/analytics/engine'
 import { calculateRFVScore, getRFVSegmentBadge, type RFVScore } from '@/lib/analytics/rfv'
+import { matchesRFVFilters, RECENCY_FILTERS, FREQUENCY_FILTERS, VALUE_FILTERS, type RFVFilterState } from '@/lib/analytics/rfv-filters'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,7 +18,7 @@ export default function ClientesPage() {
   const [customers, setCustomers] = useState<CustomerMetric[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<'ltv' | 'orders' | 'recent'>('ltv')
-  const [rfvFilter, setRfvFilter] = useState<string | null>(null)
+  const [rfvFilters, setRfvFilters] = useState<RFVFilterState>({})
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [customerDetail, setCustomerDetail] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -78,9 +79,7 @@ export default function ClientesPage() {
   }
 
   // Filter by RFV segment if selected
-  const filtered = rfvFilter
-    ? customersWithRFV.filter((c) => c.rfv.rfvSegment === rfvFilter)
-    : customersWithRFV
+  const filtered = customersWithRFV.filter((c) => matchesRFVFilters({ segment: c.rfv.rfvSegment, daysSinceLastOrder: c.daysSinceLastOrder ?? undefined, orderCount: c.orderCount, lifetimeValue: c.lifetimeValue }, rfvFilters))
 
   // Sort
   const sorted = [...filtered].sort((a, b) => {
@@ -92,7 +91,7 @@ export default function ClientesPage() {
 
   const totalLTV = customers.reduce((sum, c) => sum + c.lifetimeValue, 0)
   const totalOrders = customers.reduce((sum, c) => sum + c.orderCount, 0)
-  const avgOrderValue = customers.length > 0 ? totalLTV / totalOrders : 0
+  const avgOrderValue = totalOrders > 0 ? totalLTV / totalOrders : 0
 
   if (customers.length === 0) {
     return (
@@ -123,8 +122,8 @@ export default function ClientesPage() {
           accentColor="navy"
         />
         <MetricCard
-          label="Peças"
-          value={customers.reduce((sum, c) => sum + c.unitsSold, 0).toString()}
+          label="LTV médio por cliente"
+          value={formatBRL(customers.length > 0 ? totalLTV / customers.length : 0)}
           accentColor="navy"
         />
         <MetricCard
@@ -148,9 +147,9 @@ export default function ClientesPage() {
               <p className="text-sm font-medium text-neutral-600">Segmentação RFV</p>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setRfvFilter(null)}
+                  onClick={() => setRfvFilters((previous) => ({ ...previous, segment: undefined }))}
                   className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
-                    rfvFilter === null
+                    !rfvFilters.segment
                       ? 'bg-primary text-primary-foreground'
                       : 'border border-border bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
@@ -163,9 +162,9 @@ export default function ClientesPage() {
                     return (
                       <button
                         key={segment}
-                        onClick={() => setRfvFilter(segment)}
+                        onClick={() => setRfvFilters((previous) => ({ ...previous, segment }))}
                         className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
-                          rfvFilter === segment
+                          rfvFilters.segment === segment
                             ? 'bg-primary text-primary-foreground'
                             : 'border border-border bg-muted text-muted-foreground hover:bg-muted/80'
                         }`}
@@ -176,6 +175,12 @@ export default function ClientesPage() {
                   }
                 )}
               </div>
+            </div>
+
+            <div className="grid gap-3 border-t pt-4 md:grid-cols-3" aria-label="Filtros cumulativos RFV">
+              <RFVSelect label="Recência" value={rfvFilters.recency} options={RECENCY_FILTERS} onChange={(value) => setRfvFilters((previous) => ({ ...previous, recency: value || undefined }))} />
+              <RFVSelect label="Frequência" value={rfvFilters.frequency} options={FREQUENCY_FILTERS} onChange={(value) => setRfvFilters((previous) => ({ ...previous, frequency: value || undefined }))} />
+              <RFVSelect label="Valor acumulado" value={rfvFilters.value} options={VALUE_FILTERS} onChange={(value) => setRfvFilters((previous) => ({ ...previous, value: value || undefined }))} />
             </div>
 
             {/* Sort buttons */}
@@ -203,7 +208,7 @@ export default function ClientesPage() {
                     <th className="px-4 py-3 font-medium">Cliente</th>
                     <th className="px-4 py-3 font-medium">RFV</th>
                     <th className="px-4 py-3 font-medium text-right">Valor Total</th>
-                    <th className="px-4 py-3 font-medium text-right">Peças</th>
+                    <th className="px-4 py-3 font-medium text-right">LTV</th>
                     <th className="px-4 py-3 font-medium text-right">Pedidos</th>
                     <th className="px-4 py-3 font-medium text-right">Ticket Médio</th>
                     <th className="px-4 py-3 font-medium">Última Venda</th>
@@ -227,7 +232,7 @@ export default function ClientesPage() {
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-semibold">{formatBRL(c.lifetimeValue)}</td>
                         <td className="px-4 py-3 text-right">
-                          {c.unitsSold}
+                          {formatBRL(c.lifetimeValue)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Badge variant="secondary" className="text-xs">{c.orderCount}</Badge>
@@ -273,7 +278,11 @@ export default function ClientesPage() {
         </CardContent>
       </Card>
 
-      {selectedCustomerId && <Card><CardContent className="pt-6">{detailLoading ? <Skeleton className="h-48" /> : customerDetail ? <div className="space-y-4"><div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">Detalhe do cliente</h2><p className="text-sm text-muted-foreground">{customerDetail.contact?.email || 'Contato sem e-mail'} · {customerDetail.contact?.telefone || customerDetail.contact?.celular || 'Telefone não informado'}</p></div><button type="button" onClick={() => { setSelectedCustomerId(null); setCustomerDetail(null) }} className="text-sm text-muted-foreground hover:text-foreground">Fechar</button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><MetricCard label="Valor total comprado" value={formatBRL(customerDetail.summary.revenue)} /><MetricCard label="Peças" value={customerDetail.summary.units} /><MetricCard label="Pedidos" value={customerDetail.summary.orders} /><MetricCard label="Ticket médio" value={formatBRL(customerDetail.summary.averageOrderValue)} /><MetricCard label="Primeira compra" value={customerDetail.summary.firstOrderDate ? formatDateOnlyBR(customerDetail.summary.firstOrderDate) : '—'} /><MetricCard label="Última compra" value={customerDetail.summary.lastOrderDate ? formatDateOnlyBR(customerDetail.summary.lastOrderDate) : '—'} /></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="py-2">Data</th><th className="py-2">Pedido</th><th className="py-2">Produto</th><th className="py-2">SKU</th><th className="py-2 text-right">Qtd.</th><th className="py-2 text-right">Valor unitário</th><th className="py-2 text-right">Valor total</th><th className="py-2">Status</th></tr></thead><tbody>{customerDetail.history.map((item: any, index: number) => <tr key={`${item.pedido}-${index}`} className="border-b last:border-0"><td className="py-2">{item.data ? formatDateOnlyBR(item.data) : '—'}</td><td className="py-2">{item.pedido ?? '—'}</td><td className="py-2">{item.produto ?? '—'}</td><td className="py-2">{item.sku ?? '—'}</td><td className="py-2 text-right">{item.quantidade ?? '—'}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorUnitario)}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorTotal)}</td><td className="py-2">{item.status ?? '—'}</td></tr>)}</tbody></table></div></div> : <p className="text-sm text-muted-foreground">Não foi possível carregar o detalhe.</p>}</CardContent></Card>}
+      {selectedCustomerId && <Card><CardContent className="pt-6">{detailLoading ? <Skeleton className="h-48" /> : customerDetail ? <div className="space-y-4"><div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">Detalhe do cliente</h2><p className="text-sm text-muted-foreground">{customerDetail.contact?.email || 'Contato sem e-mail'} · {customerDetail.contact?.telefone || customerDetail.contact?.celular || 'Telefone não informado'}</p></div><button type="button" onClick={() => { setSelectedCustomerId(null); setCustomerDetail(null) }} className="text-sm text-muted-foreground hover:text-foreground">Fechar</button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><MetricCard label="Valor total comprado (LTV)" value={formatBRL(customerDetail.summary.revenue)} /><MetricCard label="LTV médio" value={formatBRL(customerDetail.summary.averageOrderValue)} /><MetricCard label="Pedidos" value={customerDetail.summary.orders} /><MetricCard label="Ticket médio" value={formatBRL(customerDetail.summary.averageOrderValue)} /><MetricCard label="Primeira compra" value={customerDetail.summary.firstOrderDate ? formatDateOnlyBR(customerDetail.summary.firstOrderDate) : '—'} /><MetricCard label="Última compra" value={customerDetail.summary.lastOrderDate ? formatDateOnlyBR(customerDetail.summary.lastOrderDate) : '—'} /></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b"><tr><th className="py-2">Data</th><th className="py-2">Pedido</th><th className="py-2">Produto</th><th className="py-2">SKU</th><th className="py-2 text-right">Qtd.</th><th className="py-2 text-right">Valor unitário</th><th className="py-2 text-right">Valor total</th><th className="py-2">Status</th></tr></thead><tbody>{customerDetail.history.map((item: any, index: number) => <tr key={`${item.pedido}-${index}`} className="border-b last:border-0"><td className="py-2">{item.data ? formatDateOnlyBR(item.data) : '—'}</td><td className="py-2">{item.pedido ?? '—'}</td><td className="py-2">{item.produto ?? '—'}</td><td className="py-2">{item.sku ?? '—'}</td><td className="py-2 text-right">{item.quantidade ?? '—'}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorUnitario)}</td><td className="py-2 text-right font-mono">{formatBRL(item.valorTotal)}</td><td className="py-2">{item.status ?? '—'}</td></tr>)}</tbody></table></div></div> : <p className="text-sm text-muted-foreground">Não foi possível carregar o detalhe.</p>}</CardContent></Card>}
     </div>
   )
+}
+
+function RFVSelect({ label, value, options, onChange }: { label: string; value?: string; options: readonly (readonly [string, string, number, number])[]; onChange: (value: string) => void }) {
+  return <label className="space-y-1 text-sm font-medium"><span>{label}</span><select value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-normal"><option value="">Todos</option>{options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>
 }

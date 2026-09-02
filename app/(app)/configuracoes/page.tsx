@@ -4,7 +4,6 @@ import { getOlistConnectionStatus } from '@/lib/olist/status'
 import { loadIntegrationFreshness } from '@/lib/integrations/freshness'
 import { checkSumupStatus } from '@/lib/sumup/status'
 import { canManageIntegrations } from '@/lib/auth/rbac'
-import { DEFAULT_TAX_RATE } from '@/lib/tax/engine'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -185,12 +184,12 @@ export default async function ConfiguracoesPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
-              <p className="font-medium text-foreground">Alíquota de Imposto Padrão</p>
+              <p className="font-medium text-foreground">Alíquota de Imposto</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Usada em Impostos para estimar o valor devido sobre a receita projetada (Simples Nacional, faixa 1)
+                Calculada por competência com RBT12 e a fórmula da faixa; sem base disponível não há estimativa automática.
               </p>
             </div>
-            <span className="text-lg font-mono font-semibold text-primary">{(DEFAULT_TAX_RATE * 100).toFixed(1)}%</span>
+            <span className="text-lg font-mono font-semibold text-primary">Dinâmica</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>

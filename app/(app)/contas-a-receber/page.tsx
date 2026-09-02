@@ -20,7 +20,7 @@ export default async function ContasAReceberPage() {
   const supabase = await createServerSupabaseClient()
   const { data: arRows, error } = await supabase
     .from('olist_accounts_receivable')
-    .select('id, valor, saldo, situacao, data_vencimento, data_liquidacao, historico, numero_documento, cliente_olist_id')
+    .select('id, valor, saldo, situacao, data_vencimento, data_liquidacao, historico, numero_documento, cliente_olist_id, forma_recebimento_nome')
     .order('data_vencimento', { ascending: true })
 
   if (error) {
@@ -42,6 +42,9 @@ export default async function ContasAReceberPage() {
       historico: row.historico,
       clienteNome: row.cliente_olist_id ? (contactNameByOlistId.get(row.cliente_olist_id) ?? null) : null,
       valor: row.valor,
+      dataVencimento: row.data_vencimento,
+      formaPagamento: row.forma_recebimento_nome,
+      parcela: row.historico?.match(/parcela\s+(\d+\/\d+)/i)?.[1] ?? null,
       classification,
       agingBucket:
         classification.included && classification.bucket === 'contratado'

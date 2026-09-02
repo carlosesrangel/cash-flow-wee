@@ -17,8 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Sidebar />
       </div>
       {/* Main content */}
-      <main className="flex-1 overflow-x-hidden pt-16 md:pt-0">
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+      <main className="flex min-h-screen flex-1 flex-col overflow-x-hidden pt-16 md:pt-0">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">{children}</div>
+        <footer className="border-t border-border px-4 py-4 text-center text-[11px] text-muted-foreground sm:px-6 lg:px-8">
+          Desenvolvido por L&apos;Engrenage | Inteligência de Varejo |{' '}
+          <a href="https://lengrenage.com.br" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            lengrenage.com.br
+          </a>
+        </footer>
       </main>
     </div>
   )

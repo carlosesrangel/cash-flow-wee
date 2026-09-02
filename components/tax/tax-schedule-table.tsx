@@ -23,9 +23,12 @@ export function TaxScheduleTable({ schedule, today }: { schedule: TaxObligation[
             <th className="px-4 py-3 text-left font-medium">Receita de Referência</th>
             <th className="px-4 py-3 text-right font-medium">Receita Projetada</th>
             <th className="px-4 py-3 text-right font-medium">Alíquota</th>
+            <th className="px-4 py-3 text-right font-medium">RBT12</th>
+            <th className="px-4 py-3 text-left font-medium">Faixa</th>
             <th className="px-4 py-3 text-right font-medium">Imposto Estimado</th>
             <th className="px-4 py-3 text-left font-medium">Vencimento</th>
             <th className="px-4 py-3 text-left font-medium">Status</th>
+            <th className="px-4 py-3 text-left font-medium">Origem</th>
           </tr>
         </thead>
         <tbody>
@@ -42,6 +45,8 @@ export function TaxScheduleTable({ schedule, today }: { schedule: TaxObligation[
                 </td>
                 <td className="px-4 py-3 text-right font-mono">{formatBRL(s.receitaProjetada)}</td>
                 <td className="px-4 py-3 text-right text-muted-foreground">{(s.aliquota * 100).toFixed(1)}%</td>
+                <td className="px-4 py-3 text-right font-mono">{formatBRL(s.rbt12)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{s.faixa}</td>
                 <td className="px-4 py-3 text-right font-mono font-semibold">{formatBRL(s.valorImposto)}</td>
                 <td className="px-4 py-3">{formatDateOnlyBR(s.vencimento)}</td>
                 <td className="px-4 py-3">
@@ -49,6 +54,7 @@ export function TaxScheduleTable({ schedule, today }: { schedule: TaxObligation[
                   {status === 'proximo' && <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">Próximo</Badge>}
                   {status === 'futuro' && <Badge variant="secondary">Futuro</Badge>}
                 </td>
+                <td className="px-4 py-3"><Badge variant={s.origem === 'realizado' ? 'success' : 'secondary'}>{s.origem === 'realizado' ? 'Realizado' : 'Projetado'}</Badge></td>
               </tr>
             )
           })}

@@ -6,6 +6,7 @@ import { AccountsReceivableTable, type AccountsReceivableRow } from '@/component
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, X } from 'lucide-react'
+import { getCashFlowDateRange, type CashFlowDatePreset } from '@/lib/cash-flow/date-presets'
 
 type ReceivableStatus = 'realizado' | 'vencido' | '0-7' | '8-15' | '16-30' | '31-60' | '61+' | 'all'
 
@@ -18,28 +19,11 @@ interface FilterState {
   maxValue: number | null
 }
 
-const getDateRange = (preset: string, today: string): [string, string] => {
-  const todayDate = new Date(today)
-  const weekLater = new Date(todayDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const thirtyDaysLater = new Date(todayDate.getTime() + 30 * 24 * 60 * 60 * 1000)
-  const sixtyDaysLater = new Date(todayDate.getTime() + 60 * 24 * 60 * 60 * 1000)
-  const ninetyDaysLater = new Date(todayDate.getTime() + 90 * 24 * 60 * 60 * 1000)
-
-  const dateToString = (d: Date) => d.toISOString().split('T')[0]
-
-  switch (preset) {
-    case 'week':
-      return [today, dateToString(weekLater)]
-    case 'month':
-      return [today, dateToString(thirtyDaysLater)]
-    case 'sixty':
-      return [today, dateToString(sixtyDaysLater)]
-    case 'ninety':
-      return [today, dateToString(ninetyDaysLater)]
-    default:
-      return [today, dateToString(sixtyDaysLater)]
-  }
-}
+const DATE_PRESETS: Array<{ value: CashFlowDatePreset; label: string }> = [
+  { value: 'ontem', label: 'Ontem' }, { value: 'hoje', label: 'Hoje' }, { value: 'este-mes', label: 'Este mês' },
+  { value: 'mes-anterior', label: 'Mês anterior' }, { value: 'este-ano', label: 'Este ano' }, { value: 'ano-anterior', label: 'Ano anterior' },
+  { value: 'proximo-mes', label: 'Próximo mês' }, { value: 'proximos-30', label: 'Próximos 30 dias' }, { value: 'ultimos-30', label: 'Últimos 30 dias' },
+]
 
 const getAgingBucket = (daysUntilDue: number): string => {
   if (daysUntilDue < 0) return 'vencido'
@@ -59,7 +43,7 @@ export function AccountsReceivableFilters({
   clients: string[]
   today: string
 }) {
-  const [dateFrom, dateTo] = getDateRange('sixty', today)
+  const [dateFrom, dateTo] = getCashFlowDateRange('proximos-30', today)
   const [filters, setFilters] = useState<FilterState>({
     dateFrom,
     dateTo,
@@ -109,12 +93,12 @@ export function AccountsReceivableFilters({
   }, [rows, today, filters])
 
   const handleDatePreset = (preset: string) => {
-    const [newFrom, newTo] = getDateRange(preset, today)
+    const [newFrom, newTo] = getCashFlowDateRange(preset as CashFlowDatePreset, today)
     setFilters((prev) => ({ ...prev, dateFrom: newFrom, dateTo: newTo }))
   }
 
   const handleReset = () => {
-    const [newFrom, newTo] = getDateRange('sixty', today)
+    const [newFrom, newTo] = getCashFlowDateRange('proximos-30', today)
     setFilters({
       dateFrom: newFrom,
       dateTo: newTo,
@@ -148,54 +132,7 @@ export function AccountsReceivableFilters({
           <span>Data de Vencimento</span>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('week', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('week')}
-          >
-            Próxima Semana
-          </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('month', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('month')}
-          >
-            Próximo Mês
-          </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('sixty', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('sixty')}
-          >
-            Próximos 60 dias ⭐
-          </Button>
-          <Button
-            variant={
-              filters.dateFrom === today &&
-              filters.dateTo === getDateRange('ninety', today)[1]
-                ? 'default'
-                : 'outline'
-            }
-            size="sm"
-            onClick={() => handleDatePreset('ninety')}
-          >
-            Próximos 90 dias
-          </Button>
+          {DATE_PRESETS.map((preset) => { const range = getCashFlowDateRange(preset.value, today); return <Button key={preset.value} variant={filters.dateFrom === range[0] && filters.dateTo === range[1] ? 'default' : 'outline'} size="sm" onClick={() => handleDatePreset(preset.value)}>{preset.label}</Button> })}
         </div>
         <div className="flex gap-2">
           <div className="flex-1">

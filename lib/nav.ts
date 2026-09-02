@@ -12,7 +12,9 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Diário', href: '/fluxo-de-caixa/diario' },
       { label: 'Mensal', href: '/fluxo-de-caixa/mensal' },
+      { label: 'Mensal - Resumo', href: '/fluxo-de-caixa/mensal-resumo' },
       { label: 'Anual', href: '/fluxo-de-caixa/anual' },
+      { label: 'Anual - Resumo', href: '/fluxo-de-caixa/anual-resumo' },
     ],
   },
   { label: 'Contas a Receber', href: '/contas-a-receber' },

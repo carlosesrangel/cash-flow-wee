@@ -14,6 +14,9 @@ export type AccountsReceivableRow = {
   historico: string | null
   clienteNome: string | null
   valor: number | null
+  dataVencimento?: string | null
+  formaPagamento?: string | null
+  parcela?: string | null
   classification: ClassifiedEntry
   agingBucket: AgingBucket | null
 }
@@ -26,7 +29,7 @@ const EXCLUSION_REASON_LABEL: Record<Exclude<ClassifiedEntry, { included: true }
 
 const BUCKET_LABEL: Record<'realizado' | 'contratado', string> = {
   realizado: 'Realizado',
-  contratado: 'Contratado',
+  contratado: 'Em aberto',
 }
 
 const getAgingBadgeVariant = (bucket: AgingBucket | null): 'destructive' | 'warning' | 'success' | 'default' => {
@@ -125,7 +128,8 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                   <SortIcon field="valor" />
                 </div>
               </th>
-              <th className="px-3 py-3 font-medium">Situação</th>
+              <th className="px-3 py-3 font-medium">Parcela</th>
+              <th className="px-3 py-3 font-medium">Forma de pagamento</th>
               <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('aging')}>
                 <div className="flex items-center gap-2">
                   Status
@@ -151,19 +155,13 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                   <td className="px-3 py-3 font-medium text-foreground">{row.clienteNome || '—'}</td>
                   <td className="px-3 py-3">{formatDateOnlyBR(classification.date)}</td>
                   <td className="px-3 py-3 text-right font-mono">{row.valor != null ? formatBRL(row.valor) : '—'}</td>
+                  <td className="px-3 py-3">{row.parcela || '—'}</td>
+                  <td className="px-3 py-3">{row.formaPagamento || '—'}</td>
                   <td className="px-3 py-3">
-                    <Badge variant={classification.bucket === 'realizado' ? 'success' : 'secondary'}>
-                      {BUCKET_LABEL[classification.bucket]}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-3">
-                    {row.agingBucket ? (
-                      <Badge variant={getAgingBadgeVariant(row.agingBucket)}>
-                        {AGING_BUCKET_LABEL[row.agingBucket]}
-                      </Badge>
-                    ) : (
-                      '—'
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant={classification.bucket === 'realizado' ? 'success' : 'secondary'}>{BUCKET_LABEL[classification.bucket]}</Badge>
+                      {row.agingBucket && <Badge variant={getAgingBadgeVariant(row.agingBucket)}>{AGING_BUCKET_LABEL[row.agingBucket]}</Badge>}
+                    </div>
                   </td>
                 </tr>
               )
