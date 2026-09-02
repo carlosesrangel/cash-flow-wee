@@ -20,12 +20,14 @@ export function TaxScheduleTable({ schedule, today }: { schedule: TaxObligation[
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
-            <th className="px-4 py-3 text-left font-medium">Receita de Referência</th>
-            <th className="px-4 py-3 text-right font-medium">Receita Projetada</th>
-            <th className="px-4 py-3 text-right font-medium">Alíquota</th>
+            <th className="px-4 py-3 text-left font-medium">Competência</th>
+            <th className="px-4 py-3 text-right font-medium">Faturamento</th>
             <th className="px-4 py-3 text-right font-medium">RBT12</th>
             <th className="px-4 py-3 text-left font-medium">Faixa</th>
-            <th className="px-4 py-3 text-right font-medium">Imposto Estimado</th>
+            <th className="px-4 py-3 text-right font-medium">Alíquota nominal</th>
+            <th className="px-4 py-3 text-right font-medium">Dedução</th>
+            <th className="px-4 py-3 text-right font-medium">Alíquota efetiva</th>
+            <th className="px-4 py-3 text-right font-medium">Imposto</th>
             <th className="px-4 py-3 text-left font-medium">Vencimento</th>
             <th className="px-4 py-3 text-left font-medium">Status</th>
             <th className="px-4 py-3 text-left font-medium">Origem</th>
@@ -44,9 +46,11 @@ export function TaxScheduleTable({ schedule, today }: { schedule: TaxObligation[
                   {MES_NOMES[s.mes - 1]}/{s.ano}
                 </td>
                 <td className="px-4 py-3 text-right font-mono">{formatBRL(s.receitaProjetada)}</td>
-                <td className="px-4 py-3 text-right text-muted-foreground">{(s.aliquota * 100).toFixed(1)}%</td>
                 <td className="px-4 py-3 text-right font-mono">{formatBRL(s.rbt12)}</td>
                 <td className="px-4 py-3 text-muted-foreground">{s.faixa}</td>
+                <td className="px-4 py-3 text-right text-muted-foreground">{(s.aliquotaNominal * 100).toFixed(2)}%</td>
+                <td className="px-4 py-3 text-right font-mono">{formatBRL(s.parcelaDeduzir)}</td>
+                <td className="px-4 py-3 text-right text-muted-foreground">{(s.aliquota * 100).toFixed(2)}%</td>
                 <td className="px-4 py-3 text-right font-mono font-semibold">{formatBRL(s.valorImposto)}</td>
                 <td className="px-4 py-3">{formatDateOnlyBR(s.vencimento)}</td>
                 <td className="px-4 py-3">

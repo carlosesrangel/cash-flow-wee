@@ -50,7 +50,9 @@ export function AccountsPayableFilters({
   const filteredRows = useMemo(() => rows.filter((row) => matchesPayableFilter(row, filters)), [rows, filters])
   const totals = useMemo(() => calculatePayableTotals(filteredRows), [filteredRows])
   const hasUncategorized = rows.some((row) => !row.categoria?.trim())
-  const hasActiveFilters = filters.status !== 'all' || filters.categoria !== 'all' || Boolean(filters.fornecedor) || filters.minValue !== null || filters.maxValue !== null
+  const defaultFrom = getCashFlowDateRange('proximos-30', today)[0]
+  const defaultTo = getCashFlowDateRange('proximos-30', today)[1]
+  const hasActiveFilters = filters.status !== 'all' || filters.categoria !== 'all' || Boolean(filters.fornecedor) || filters.minValue !== null || filters.maxValue !== null || filters.dateFrom !== defaultFrom || filters.dateTo !== defaultTo
   const reset = () => setFilters({ status: 'all', categoria: 'all', fornecedor: '', minValue: null, maxValue: null, dateFrom: getCashFlowDateRange('proximos-30', today)[0], dateTo: getCashFlowDateRange('proximos-30', today)[1] })
 
   return (

@@ -3,6 +3,7 @@ import { getCurrentMember } from '@/lib/auth/session'
 import { canEditForecast } from '@/lib/auth/rbac'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { loadCanonicalPlan, updateCanonicalPlan } from '@/lib/planning/canonical-repository'
+import { syncLedgerFromAllSources } from '@/lib/ledger/populate'
 
 export async function GET() {
   const member = await getCurrentMember()
@@ -23,6 +24,8 @@ export async function PATCH(request: Request) {
     const result = await updateCanonicalPlan(client, member.orgId, competenceMonth, amount, member.profileId)
     const { error: auditError } = await client.from('plan_audit_log').insert({ org_id: member.orgId, competence_month: competenceMonth, previous_amount: result.previousAmount, new_amount: result.amount, actor_profile_id: member.profileId })
     if (auditError) throw new Error(`Falha ao registrar auditoria: ${auditError.message}`)
+    const ledgerRefresh = await syncLedgerFromAllSources(member.orgId)
+    if (!ledgerRefresh.success) throw new Error(`Plano salvo, mas a projeção não foi atualizada: ${ledgerRefresh.error ?? 'erro no ledger'}`)
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao salvar o plano' }, { status: 400 })

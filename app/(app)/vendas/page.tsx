@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,6 +10,7 @@ import { TopCustomersCard } from '@/components/analytics/top-customers-card'
 import { MonthlyRevenueCard } from '@/components/analytics/monthly-revenue-card'
 import { ProductsRevenueCard } from '@/components/analytics/products-revenue-card'
 import { VarianceCard } from '@/components/analytics/variance-card'
+import { SalesTargetCard } from '@/components/analytics/sales-target-card'
 import { DateRangeFilter, type DateRange } from '@/components/analytics/date-range-filter'
 import type {
   DailyRevenuePoint,
@@ -26,6 +27,7 @@ type AnalyticsData = {
   summary: SalesSummary
   topCustomers: TopCustomer[]
   products: any[]
+  target: { target: number; realizedSales: number; targetGap: number; achievementPercent: number | null; billedThrough: string | null }
 }
 
 export default function VendasPage() {
@@ -38,11 +40,7 @@ export default function VendasPage() {
     return { startDate: start, endDate: end, days: 90 }
   })
 
-  useEffect(() => {
-    loadAnalytics()
-  }, [dateRange])
-
-  async function loadAnalytics() {
+  const loadAnalytics = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -50,27 +48,36 @@ export default function VendasPage() {
         endDate: dateRange.endDate.toISOString(),
       })
 
-      const [revenueRes, customersRes, productsRes] = await Promise.all([
+      const [revenueRes, customersRes, productsRes, targetRes] = await Promise.all([
         fetch(`/api/analytics/revenue?${params}`),
         fetch(`/api/analytics/customers?${params}`),
         fetch(`/api/analytics/products?${params}`),
+        fetch('/api/analytics/sales-target'),
       ])
 
       const revenue = await revenueRes.json()
       const customers = await customersRes.json()
       const products = await productsRes.json()
+      const target = await targetRes.json()
 
       setData({
         ...revenue,
         topCustomers: customers.topCustomers,
         products: products.products,
+        target,
       })
-    } catch (error) {
+    } catch {
       // Error suppressed
     } finally {
       setLoading(false)
     }
-  }
+  }, [dateRange])
+
+  useEffect(() => {
+    // Data loading is the external synchronization this effect owns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAnalytics()
+  }, [loadAnalytics])
 
   function handleDateRangeChange(newRange: DateRange) {
     setDateRange(newRange)
@@ -105,6 +112,8 @@ export default function VendasPage() {
       />
 
       <DateRangeFilter onRangeChange={handleDateRangeChange} loading={loading} />
+
+      <SalesTargetCard {...data.target} />
 
       {loading ? (
         <Card>

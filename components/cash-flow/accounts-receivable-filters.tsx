@@ -109,8 +109,10 @@ export function AccountsReceivableFilters({
     })
   }
 
+  const defaultFrom = getCashFlowDateRange('proximos-30', today)[0]
+  const defaultTo = getCashFlowDateRange('proximos-30', today)[1]
   const hasActiveFilters =
-    filters.status !== 'all' || filters.client || filters.minValue || filters.maxValue
+    filters.status !== 'all' || Boolean(filters.client) || filters.minValue !== null || filters.maxValue !== null || filters.dateFrom !== defaultFrom || filters.dateTo !== defaultTo
 
   const statusLabels: Record<ReceivableStatus, string> = {
     all: 'Todos',
