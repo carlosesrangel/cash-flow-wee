@@ -17,7 +17,15 @@ export function ReconciliationDashboard({ matches, canManage, universe, sumupRow
   const sumupComparableValue = universe?.SUMUP_COMPARABLE_VALUE ?? 0
   const variance = Math.round((tinyComparableValue - sumupComparableValue) * 100) / 100
   const matchedSumupIds = new Set(matched.map((row) => row.sumup_transaction_id).filter(Boolean))
-  const unmatchedSumup = sumupRows.filter((row) => !matchedSumupIds.has(row.id) && ['pos', 'ecom'].includes(String(row.paymentType ?? '').toLowerCase()) && Boolean(!universe?.COMPARABLE_START_DATE || !row.date || (row.date >= universe.COMPARABLE_START_DATE && row.date <= (universe.COMPARABLE_END_DATE ?? row.date))))
+  const unmatchedSumup = sumupRows.filter((row) => {
+    const status = String(row.status ?? '').toLowerCase()
+    const date = row.date
+    const inComparablePeriod = Boolean(date && (!universe?.COMPARABLE_START_DATE || date >= universe.COMPARABLE_START_DATE) && (!universe?.COMPARABLE_END_DATE || date <= universe.COMPARABLE_END_DATE))
+    return !matchedSumupIds.has(row.id) &&
+      ['pos', 'ecom'].includes(String(row.paymentType ?? '').toLowerCase()) &&
+      ['successful', 'success', 'reconciled', 'settled', 'paid_out', 'scheduled', 'pending'].includes(status) &&
+      inComparablePeriod
+  })
   const [statusFilter, setStatusFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [minValue, setMinValue] = useState('')
