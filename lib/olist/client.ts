@@ -1,6 +1,8 @@
 import 'server-only'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { refreshTokens } from '@/lib/olist/oauth'
+import { recordExternalFailure } from '@/lib/observability/telemetry'
+import { sanitizeIntegrationError } from '@/lib/observability/health'
 
 const API_BASE_URL = 'https://api.tiny.com.br/public-api/v3'
 const EXPIRY_BUFFER_MS = 5 * 60 * 1000
@@ -146,16 +148,25 @@ export async function olistFetch<T>(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     await waitForRateLimitSlot()
 
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${connection.accessToken}` },
-    })
+    const startedAt = Date.now()
+    let response: Response
+    try {
+      response = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${connection.accessToken}` },
+      })
+    } catch (error) {
+      recordExternalFailure({ provider: 'olist', endpoint: url.toString(), startedAt, error })
+      throw error
+    }
 
     if (response.ok) {
       return (await response.json()) as T
     }
 
     const detail = await response.text()
-    lastError = new Error(`Olist API request failed (${response.status}) for ${path}: ${detail}`)
+    recordExternalFailure({ provider: 'olist', endpoint: url.toString(), status: response.status, startedAt })
+    const safe = sanitizeIntegrationError(String(response.status), detail)
+    lastError = new Error(`Olist API request failed (${response.status}) for ${path}: ${safe.message ?? 'upstream error'}`)
 
     if (response.status === 401) {
       const admin = createAdminSupabaseClient()

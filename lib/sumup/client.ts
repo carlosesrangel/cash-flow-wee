@@ -1,4 +1,6 @@
 import 'server-only'
+import { recordExternalFailure } from '@/lib/observability/telemetry'
+import { sanitizeIntegrationError } from '@/lib/observability/health'
 
 const API_BASE_URL = 'https://api.sumup.com'
 const MAX_RETRIES = 3
@@ -45,17 +47,26 @@ export async function sumupFetch<T>(
   let lastError: Error | null = null
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${getApiKey()}` },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
+    const startedAt = Date.now()
+    let response: Response
+    try {
+      response = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${getApiKey()}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+    } catch (error) {
+      recordExternalFailure({ provider: 'sumup', endpoint: url.toString(), startedAt, error })
+      throw error
+    }
 
     if (response.ok) {
       return (await response.json()) as T
     }
 
     const detail = (await response.text()).slice(0, MAX_ERROR_DETAIL_CHARS)
-    lastError = new Error(`SumUp API request failed (${response.status}) for ${path}: ${detail}`)
+    recordExternalFailure({ provider: 'sumup', endpoint: url.toString(), status: response.status, startedAt })
+    const safe = sanitizeIntegrationError(String(response.status), detail)
+    lastError = new Error(`SumUp API request failed (${response.status}) for ${path}: ${safe.message ?? 'upstream error'}`)
 
     if (!RETRY_STATUS_CODES.has(response.status) || attempt === MAX_RETRIES - 1) {
       throw lastError

@@ -3,8 +3,10 @@ import { canManageIntegrations } from '@/lib/auth/rbac'
 import { getOlistConnectionStatus } from '@/lib/olist/status'
 import { checkSumupStatus } from '@/lib/sumup/status'
 import { loadIntegrationFreshness } from '@/lib/integrations/freshness'
+import { loadSystemHealth } from '@/lib/observability/system-health'
 import { OlistCard } from '@/components/integrations/olist-card'
 import { SumupCard } from '@/components/integrations/sumup-card'
+import { SystemHealthCard } from '@/components/integrations/system-health-card'
 import { PageHeader } from '@/components/ui/page-header'
 
 export default async function IntegracoesPage({
@@ -31,7 +33,9 @@ export default async function IntegracoesPage({
   // outbound call to their API on every render. Only spend it on users who can
   // act on the result — everyone else sees "não verificado".
   const sumupStatus = canManage ? await checkSumupStatus() : ('nao_verificado' as const)
-  const freshness = member ? await loadIntegrationFreshness(member.orgId) : null
+  const [freshness, systemHealth] = member
+    ? await Promise.all([loadIntegrationFreshness(member.orgId), loadSystemHealth(member.orgId)])
+    : [null, null]
 
   return (
     <div className="space-y-6">
@@ -66,6 +70,7 @@ export default async function IntegracoesPage({
           <p><span className="font-medium text-neutral-900">Ledger:</span> {freshness.lastLedgerRefresh ? new Date(freshness.lastLedgerRefresh).toLocaleString('pt-BR') : 'Nunca'}</p>
         </div>
       )}
+      {systemHealth && <SystemHealthCard health={systemHealth} />}
     </div>
   )
 }
