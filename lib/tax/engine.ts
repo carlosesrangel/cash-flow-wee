@@ -96,9 +96,6 @@ export function computeTaxSchedule(
   }
 
   // Dynamic calculation using RBT12 if provided
-  const currentYear = year || new Date().getFullYear()
-  const annexo = simplesAnexo || 'anexo-iii'
-
   return entries
     .map((entry) => {
       // Do not approximate a rate when the rolling revenue base is absent.

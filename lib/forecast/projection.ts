@@ -26,8 +26,6 @@ export async function loadForecastedCashFlowEntries(
   versionId?: string,
   scenarioId?: string
 ): Promise<CashFlowEntry[]> {
-  const admin = createAdminSupabaseClient()
-
   // Load current version if not specified
   let selectedVersionId = versionId
   if (!selectedVersionId) {
