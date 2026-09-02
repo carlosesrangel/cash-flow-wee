@@ -25,6 +25,8 @@
     "seed:planning": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/seed-canonical-planning.ts",
     "reconcile:production": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/run-production-reconciliation.ts",
     "validate:production:v2": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/validate-production-v2.ts",
+    "audit:tiny-sumup": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-tiny-sumup-universe.ts",
+    "audit:olist-auth": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-olist-auth.ts",
     "cleanup:derived:v2": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/cleanup-derived-ledger-v2.ts",
     "apply:migrations": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/apply-migrations.ts",
     "check:env": "tsx -r dotenv/config scripts/check-env.ts"

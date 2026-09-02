@@ -3,6 +3,7 @@ import { signState } from '@/lib/olist/state'
 
 const AUTHORIZE_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth'
 const TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token'
+const TOKEN_REQUEST_TIMEOUT_MS = 15_000
 
 export type OlistTokens = {
   accessToken: string
@@ -27,11 +28,21 @@ export function buildAuthorizeUrl(orgId: string): string {
 }
 
 async function requestTokens(body: URLSearchParams): Promise<OlistTokens> {
-  const response = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TOKEN_REQUEST_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    throw new Error(`Olist token request network failure: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     const detail = await response.text()
