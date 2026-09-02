@@ -46,6 +46,12 @@ function candidateLabel(candidateId: string, matchReason: MatchRow['match_reason
   return `${formatBRL(detail.valorBrutoSumupEstimado)} · ${formatDateOnlyBR(detail.dataVencimentoSumup)}`
 }
 
+function statusLabel(match: MatchRow): string {
+  if (match.match_reason?.v2_classification === 'LEGACY_UNVERIFIED') return 'Legado sem prova'
+  if (match.match_reason?.v2_classification === 'AMBIGUOUS') return 'Ambíguo'
+  return STATUS_LABEL[match.status]
+}
+
 const RESOLVED_STATUSES: MatchStatus[] = ['reconciliado_automaticamente', 'reconciliado_manualmente']
 
 export function ReconciliationTable({ matches, canManage }: { matches: MatchRow[]; canManage: boolean }) {
@@ -117,7 +123,7 @@ export function ReconciliationTable({ matches, canManage }: { matches: MatchRow[
                 <td className="px-3 py-2">{ar?.numero_documento ?? ar?.historico ?? '—'}</td>
                 <td className="px-3 py-2">{ar?.data_vencimento ? formatDateOnlyBR(ar.data_vencimento) : '—'}</td>
                 <td className="px-3 py-2">{ar?.valor != null ? formatBRL(ar.valor) : '—'}</td>
-                <td className="px-3 py-2">{STATUS_LABEL[match.status]}</td>
+                <td className="px-3 py-2">{statusLabel(match)}</td>
                 {canManage && (
                   <td className="px-3 py-2">
                     {match.status === 'conflito' && (
