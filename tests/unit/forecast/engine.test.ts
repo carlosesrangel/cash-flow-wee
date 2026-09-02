@@ -207,7 +207,7 @@ describe('loadRealizadoByMonth', () => {
 describe('createForecastVersion', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('creates the version and copies the current version entries into it', async () => {
+  it('keeps the current version instead of creating a second planning version', async () => {
     const { versionInsert, entryInsert } = mockAdmin({
       versionRows: [{ id: 'v-1', name: 'Planejamento Original', created_at: '2026-06-01T00:00:00Z' }],
       versionLookup: { id: 'v-1' },
@@ -217,13 +217,9 @@ describe('createForecastVersion', () => {
 
     const version = await createForecastVersion(ORG_ID, 'Forecast Agosto 2026', 'profile-1')
 
-    expect(version).toEqual({ id: 'v-2', name: 'Forecast Agosto 2026', createdAt: '2026-08-01T00:00:00Z' })
-    expect(versionInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ org_id: ORG_ID, name: 'Forecast Agosto 2026', created_by: 'profile-1' })
-    )
-    expect(entryInsert).toHaveBeenCalledWith([
-      expect.objectContaining({ version_id: 'v-2', ano: 2026, mes: 8, receita: 1000, updated_by: 'profile-1' }),
-    ])
+    expect(version).toEqual({ id: 'v-1', name: 'Planejamento Original', createdAt: '2026-06-01T00:00:00Z' })
+    expect(versionInsert).not.toHaveBeenCalled()
+    expect(entryInsert).not.toHaveBeenCalled()
   })
 
   it('creates a version with no entries to copy when there is no prior version', async () => {

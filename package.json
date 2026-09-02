@@ -22,6 +22,10 @@
     "seed:forecast:60months": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-forecast-60months.ts",
     "seed:payment-scenarios": "cross-env NODE_OPTIONS=--conditions=react-server DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/seed-payment-scenarios.ts",
     "import:planning": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/import-planning-workbook.ts",
+    "seed:planning": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/seed-canonical-planning.ts",
+    "reconcile:production": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/run-production-reconciliation.ts",
+    "validate:production:v2": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/validate-production-v2.ts",
+    "cleanup:derived:v2": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/cleanup-derived-ledger-v2.ts",
     "apply:migrations": "cross-env DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/apply-migrations.ts",
     "check:env": "tsx -r dotenv/config scripts/check-env.ts"
   },

@@ -7,9 +7,9 @@ describe('canonical planning rules', () => {
     expect(isPlanEditable('2026-09-01', now)).toBe(false)
     expect(isPlanEditable('2026-10-01', now)).toBe(true)
   })
-  it('retains the factual 2030-12 reference value without manufacturing earlier missing rows', () => {
+  it('retains the complete factual 2024-01 to 2030-12 reference set', () => {
     expect(PLAN_REFERENCE_VALUES['2030-12']).toBe(350000)
-    expect(PLAN_REFERENCE_VALUES['2024-01']).toBeUndefined()
+    expect(PLAN_REFERENCE_VALUES['2024-01']).toBe(17650)
   })
   it('applies scenarios only to future competencies', () => {
     const plans = [{ competenceMonth: '2026-09-01', amount: 100 }, { competenceMonth: '2026-10-01', amount: 100 }]
