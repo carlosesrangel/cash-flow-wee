@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { fetchAllPages } from '@/lib/reconciliation/run'
 import { loadCanonicalPlan } from '@/lib/planning/canonical-repository'
 import { calculateEffectiveSimplesTaxRate } from '@/lib/tax/simples-nacional'
+import { fiscalRevenueDate, isValidFiscalRevenue } from '@/lib/tax/fiscal-revenue'
 import { taxPaymentDate } from '@/lib/tax/engine'
 import { toLocalDateParam } from '@/lib/integrations/date'
 
@@ -28,8 +29,11 @@ export async function GET(req: NextRequest) {
       client.from('tax_configurations').select('simples_anexo, regime_2027').eq('org_id', member.orgId).maybeSingle(),
       fetchAllPages<Order>((start, end) => client.from('olist_orders').select('data, data_faturamento, valor_total_pedido, situacao').eq('org_id', member.orgId).range(start, end), 'Falha ao carregar vendas para RBT12'),
     ])
-    const validOrders = orders.filter((order) => !['cancelado', 'cancelada', 'cancelled', 'canceled'].includes(String(order.situacao ?? '').toLowerCase()) && (order.data_faturamento || order.data) && Number(order.valor_total_pedido) > 0)
-    const revenueDate = (order: Order) => order.data_faturamento ?? order.data
+    // Fiscal accrual uses the commercial invoice date only. The order date is
+    // intentionally not a fallback: using it would turn pre-invoice orders
+    // into taxable revenue and distort RBT12.
+    const validOrders = orders.filter(isValidFiscalRevenue)
+    const revenueDate = fiscalRevenueDate
     const actualByMonth = new Map<string, number>()
     for (const order of validOrders) { const month = revenueDate(order)?.slice(0, 7); if (month) actualByMonth.set(month, (actualByMonth.get(month) ?? 0) + Number(order.valor_total_pedido)) }
     const planByMonth = new Map(plans.map((plan) => [plan.competenceMonth.slice(0, 7), plan.amount]))
@@ -43,7 +47,7 @@ export async function GET(req: NextRequest) {
       const tax = Math.round(revenue * info.aliquota_efetiva * 100) / 100
       return { competencia_ano: year, competencia_mes: month, competencia_str: key, receita_mes: Math.round(revenue * 100) / 100, rbt12: Math.round(rbt12 * 100) / 100, faixa: info.faixa, aliquota_nominal: info.aliquota_nominal, parcela_deduzir: info.parcela_deduzir, aliquota_efetiva: Math.round(info.aliquota_efetiva * 10000) / 10000, imposto_projetado: tax, data_vencimento: taxPaymentDate(year, month), regime_2027: regime, origem: actualByMonth.has(key) ? 'realizado' : planByMonth.has(key) ? 'plano_canônico' : 'sem_base' }
     })
-    return NextResponse.json({ success: true, count: projections.length, projections, summary: { imposto_total: projections.reduce((sum, row) => sum + row.imposto_projetado, 0), receita_total: projections.reduce((sum, row) => sum + row.receita_mes, 0) }, metadata: { timezone: 'America/Sao_Paulo', regime_2027: regime, formula: '(RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12', tax_base: 'receita bruta auferida por data_faturamento; data do pedido somente como fallback', cbs_ibs: regime === 'simples-nacional-puro' ? 'integrados ao Simples; nenhum adicional estimado' : 'não calculado sem alíquotas legais configuradas' } })
+    return NextResponse.json({ success: true, count: projections.length, projections, summary: { imposto_total: projections.reduce((sum, row) => sum + row.imposto_projetado, 0), receita_total: projections.reduce((sum, row) => sum + row.receita_mes, 0) }, metadata: { timezone: 'America/Sao_Paulo', regime_2027: regime, formula: '(RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12', tax_base: 'receita bruta auferida exclusivamente por data_faturamento; pedidos sem faturamento ficam fora da base realizada', cbs_ibs: regime === 'simples-nacional-puro' ? 'integrados ao Simples; nenhum adicional estimado' : 'não calculado sem alíquotas legais configuradas' } })
   } catch (error) {
     console.error('Failed to project tax:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao projetar impostos' }, { status: 500 })

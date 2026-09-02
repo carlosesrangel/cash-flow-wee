@@ -36,7 +36,7 @@ export default async function ReconciliacaoPage() {
       />
       <Card>
         <CardContent className="pt-6">
-          <ReconciliationDashboard matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} universe={universe.report} sumupRows={universe.sumupRows} />
+          <ReconciliationDashboard matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} universe={universe.report} tinyRows={universe.tinyRows} sumupRows={universe.sumupRows} />
         </CardContent>
       </Card>
     </div>

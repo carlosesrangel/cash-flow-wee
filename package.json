@@ -29,6 +29,7 @@
     "audit:olist-auth": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-olist-auth.ts",
     "audit:reconciliation:monthly": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-tiny-sumup-monthly-v2.ts",
     "audit:reconciliation:gap": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-tiny-sumup-value-gap-v2.ts",
+    "audit:reconciliation:deterministic": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-tiny-sumup-deterministic-v2.ts",
     "audit:rbt12:coverage": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/audit-rbt12-coverage-v2.ts",
     "reaudit:reconciliation": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/reaudit-reconciliation-v2.ts",
     "cleanup:derived:v2": "cross-env DOTENV_CONFIG_PATH=.env.local NODE_OPTIONS=--conditions=react-server tsx -r dotenv/config scripts/cleanup-derived-ledger-v2.ts",
