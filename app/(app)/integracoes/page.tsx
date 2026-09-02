@@ -46,6 +46,11 @@ export default async function IntegracoesPage({
           canManage={canManage}
           lastSyncAt={olistStatus.lastSyncAt}
           lastSyncStatus={olistStatus.lastSyncStatus}
+          lastSuccessfulSyncAt={freshness?.lastOlistSuccessfulSync}
+          orderCount={freshness?.olistOrderCount}
+          latestOrderNumber={freshness?.latestOlistOrderNumber}
+          latestOrderDate={freshness?.latestOlistOrderDate}
+          latestOrderSyncedAt={freshness?.latestOlistOrderSyncedAt}
           payableCategories={olistStatus.payableCategories}
           autoSync={sync === '1'}
         />
@@ -54,6 +59,8 @@ export default async function IntegracoesPage({
       {freshness && (
         <div className="grid gap-3 rounded-lg border bg-white p-4 text-sm text-neutral-600 sm:grid-cols-2">
           <p><span className="font-medium text-neutral-900">Tiny/Olist:</span> {freshness.lastOlistSync ? new Date(freshness.lastOlistSync).toLocaleString('pt-BR') : 'Nunca'} · {freshness.olistStatus ?? 'sem execução'}</p>
+          <p><span className="font-medium text-neutral-900">Período potencialmente não sincronizado:</span> após {freshness.lastOlistSuccessfulSync ? new Date(freshness.lastOlistSuccessfulSync).toLocaleString('pt-BR') : 'a última confirmação disponível'}</p>
+          <p><span className="font-medium text-neutral-900">Último run Olist:</span> {freshness.latestOlistRunAt ? new Date(freshness.latestOlistRunAt).toLocaleString('pt-BR') : 'Nunca'} · {freshness.latestOlistRunStatus ?? 'sem execução'}</p>
           <p><span className="font-medium text-neutral-900">SumUp:</span> {freshness.lastSumupSync ? new Date(freshness.lastSumupSync).toLocaleString('pt-BR') : 'Nunca'} · {freshness.sumupStatus ?? 'sem execução'}</p>
           <p><span className="font-medium text-neutral-900">Financeiro:</span> {freshness.lastAnalyticsRefresh ? new Date(freshness.lastAnalyticsRefresh).toLocaleString('pt-BR') : 'Nunca'}</p>
           <p><span className="font-medium text-neutral-900">Ledger:</span> {freshness.lastLedgerRefresh ? new Date(freshness.lastLedgerRefresh).toLocaleString('pt-BR') : 'Nunca'}</p>

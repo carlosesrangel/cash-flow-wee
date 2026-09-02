@@ -10,6 +10,11 @@ type Props = {
   connectedAt: string | null
   canManage: boolean
   lastSyncAt?: string | null
+  lastSuccessfulSyncAt?: string | null
+  orderCount?: number
+  latestOrderNumber?: number | null
+  latestOrderDate?: string | null
+  latestOrderSyncedAt?: string | null
   lastSyncStatus?: 'success' | 'failed' | 'running' | null
   payableCategories?: { categorized: number; total: number; coveragePct: number }
   autoSync?: boolean
@@ -26,6 +31,11 @@ export function OlistCard({
   connectedAt,
   canManage,
   lastSyncAt = null,
+  lastSuccessfulSyncAt = null,
+  orderCount = 0,
+  latestOrderNumber = null,
+  latestOrderDate = null,
+  latestOrderSyncedAt = null,
   lastSyncStatus = null,
   payableCategories = { categorized: 0, total: 0, coveragePct: 100 },
   autoSync = false,
@@ -96,6 +106,23 @@ export function OlistCard({
       <p className="mt-1 text-xs text-neutral-500">
         Última sincronização: {lastSyncAt ? formatDateBR(lastSyncAt) : 'Nunca'}
       </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Última sync válida: {lastSuccessfulSyncAt ? formatDateBR(lastSuccessfulSyncAt) : 'Nunca'}
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Pedidos persistidos: {orderCount} · último pedido: {latestOrderNumber ?? '—'}{latestOrderDate ? ` (${formatDateBR(latestOrderDate)})` : ''}
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Último registro atualizado no WEE: {latestOrderSyncedAt ? formatDateBR(latestOrderSyncedAt) : 'Nunca'}
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        updated_at do fornecedor: indisponível na fonte persistida
+      </p>
+      {status === 'precisa_reautorizar' && (
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+          Integração requer reautorização. Os dados persistidos continuam disponíveis; novas sincronizações estão pausadas.
+        </p>
+      )}
       <p className="mt-1 text-xs text-neutral-500">
         Contas a pagar categorizadas: {payableCategories.categorized}/{payableCategories.total} ({payableCategories.coveragePct.toFixed(1)}%)
       </p>

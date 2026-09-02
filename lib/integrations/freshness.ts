@@ -3,6 +3,13 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 export type IntegrationFreshness = {
   lastOlistSync: string | null
+  lastOlistSuccessfulSync: string | null
+  latestOlistRunAt: string | null
+  latestOlistRunStatus: 'success' | 'failed' | 'running' | null
+  olistOrderCount: number
+  latestOlistOrderNumber: number | null
+  latestOlistOrderDate: string | null
+  latestOlistOrderSyncedAt: string | null
   olistStatus: 'success' | 'failed' | 'running' | null
   lastSumupSync: string | null
   sumupStatus: 'success' | 'failed' | 'running' | null
@@ -12,15 +19,17 @@ export type IntegrationFreshness = {
 
 export async function loadIntegrationFreshness(orgId: string): Promise<IntegrationFreshness> {
   const admin = createAdminSupabaseClient()
-  const [olist, sumup, analytics, ledger, refreshRun] = await Promise.all([
+  const [olist, sumup, analytics, ledger, refreshRun, olistOrders, olistOrderCount] = await Promise.all([
     admin.from('sync_runs').select('status, started_at, finished_at').eq('org_id', orgId).eq('integration', 'olist').order('started_at', { ascending: false }).limit(20),
     admin.from('sync_runs').select('status, started_at, finished_at').eq('org_id', orgId).eq('integration', 'sumup').order('started_at', { ascending: false }).limit(20),
     admin.from('sumup_fee_rates_12m').select('calculado_em').eq('org_id', orgId).order('calculado_em', { ascending: false }).limit(1).maybeSingle(),
     admin.from('financial_ledger').select('created_at').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('financial_refresh_runs').select('analytics_finished_at, ledger_finished_at').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('olist_orders').select('numero_pedido, data, synced_at').eq('org_id', orgId).order('synced_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('olist_orders').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
   ])
 
-  if ([olist, sumup, analytics, ledger, refreshRun].some((query) => query.error)) throw new Error('Failed to load integration freshness')
+  if ([olist, sumup, analytics, ledger, refreshRun, olistOrders, olistOrderCount].some((query) => query.error)) throw new Error('Failed to load integration freshness')
 
   const latest = (runs: { status: string; started_at: string; finished_at: string | null }[] | null) => {
     const cutoff = Date.now() - 10 * 60 * 1000
@@ -34,8 +43,19 @@ export async function loadIntegrationFreshness(orgId: string): Promise<Integrati
 
   const olistLatest = latest(olist.data)
   const sumupLatest = latest(sumup.data)
+  const olistRuns = olist.data ?? []
+  const latestSuccessfulOlistRun = olistRuns.find((run) => run.status === 'success' && run.finished_at)
+  const latestOlistRun = olistRuns.find((run) => run.finished_at) ?? olistRuns.find((run) => run.status === 'running')
+  const latestOlistOrder = olistOrders.data
   return {
     lastOlistSync: olistLatest.timestamp,
+    lastOlistSuccessfulSync: latestSuccessfulOlistRun?.finished_at ?? null,
+    latestOlistRunAt: latestOlistRun?.finished_at ?? latestOlistRun?.started_at ?? null,
+    latestOlistRunStatus: latestOlistRun?.status as IntegrationFreshness['latestOlistRunStatus'] ?? null,
+    olistOrderCount: olistOrderCount.count ?? 0,
+    latestOlistOrderNumber: latestOlistOrder?.numero_pedido ?? null,
+    latestOlistOrderDate: latestOlistOrder?.data ?? null,
+    latestOlistOrderSyncedAt: latestOlistOrder?.synced_at ?? null,
     olistStatus: olistLatest.status,
     lastSumupSync: sumupLatest.timestamp,
     sumupStatus: sumupLatest.status,

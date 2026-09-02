@@ -98,6 +98,15 @@ export default async function ConfiguracoesPage() {
                   Última sync: {olistStatus.lastSyncAt ? new Date(olistStatus.lastSyncAt).toLocaleString('pt-BR') : 'Nunca'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
+                  Última sync válida: {freshness.lastOlistSuccessfulSync ? new Date(freshness.lastOlistSuccessfulSync).toLocaleString('pt-BR') : 'Nunca'} · {freshness.olistOrderCount} pedidos persistidos
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Último pedido: {freshness.latestOlistOrderNumber ?? '—'}{freshness.latestOlistOrderDate ? ` (${new Date(freshness.latestOlistOrderDate).toLocaleDateString('pt-BR')})` : ''} · registro atualizado no WEE: {freshness.latestOlistOrderSyncedAt ? new Date(freshness.latestOlistOrderSyncedAt).toLocaleString('pt-BR') : 'Nunca'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  updated_at do fornecedor: indisponível na fonte persistida
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
                   Contas a pagar categorizadas: {olistStatus.payableCategories.categorized}/{olistStatus.payableCategories.total} ({olistStatus.payableCategories.coveragePct.toFixed(1)}%)
                 </p>
               </div>
@@ -126,6 +135,11 @@ export default async function ConfiguracoesPage() {
               </Badge>
             </div>
           </div>
+          {olistStatus.status === 'precisa_reautorizar' && (
+            <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Integração requer reautorização. As telas continuam usando dados persistidos; o período após a última sync válida pode não estar coberto.
+            </p>
+          )}
           <div className="mt-4 grid gap-3 rounded-lg border border-border p-4 text-xs text-muted-foreground sm:grid-cols-2">
             <p>Tiny/Olist — {freshness.lastOlistSync ? new Date(freshness.lastOlistSync).toLocaleString('pt-BR') : 'Nunca'} ({freshness.olistStatus ?? 'sem execução'})</p>
             <p>SumUp — {freshness.lastSumupSync ? new Date(freshness.lastSumupSync).toLocaleString('pt-BR') : 'Nunca'} ({freshness.sumupStatus ?? 'sem execução'})</p>
