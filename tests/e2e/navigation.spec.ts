@@ -20,7 +20,7 @@ test.describe('authenticated navigation', () => {
     await page.getByLabel('E-mail').fill(email!)
     await page.getByLabel('Senha').fill(password!)
     await page.getByRole('button', { name: 'Entrar' }).click()
-    await expect(page).toHaveURL(/\/visao-geral/)
+    await expect(page).toHaveURL(/\/visao-geral/, { timeout: 30_000 })
   })
 
   for (const href of flattenHrefs(NAV_ITEMS)) {

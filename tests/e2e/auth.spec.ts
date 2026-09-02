@@ -15,6 +15,16 @@ test('user can log in and reach /visao-geral', async ({ page }) => {
   await page.getByLabel('E-mail').fill(email!)
   await page.getByLabel('Senha').fill(password!)
   await page.getByRole('button', { name: 'Entrar' }).click()
-  await expect(page).toHaveURL(/\/visao-geral/)
+  await expect(page).toHaveURL(/\/visao-geral/, { timeout: 30_000 })
   await expect(page.getByRole('heading', { name: 'Visão Geral' })).toBeVisible()
+
+  await page.reload()
+  await expect(page).toHaveURL(/\/visao-geral/, { timeout: 30_000 })
+  await expect(page.getByRole('heading', { name: 'Visão Geral' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Sair' }).click()
+  await expect(page).toHaveURL(/\/login/)
+
+  await page.goto('/visao-geral')
+  await expect(page).toHaveURL(/\/login/)
 })

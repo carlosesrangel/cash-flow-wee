@@ -1,19 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 export function SignOutButton({ className }: { className?: string }) {
-  const router = useRouter()
   const [signingOut, setSigningOut] = useState(false)
 
   async function handleSignOut() {
     setSigningOut(true)
     const supabase = createBrowserSupabaseClient()
     await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    // Force the next request through proxy after the auth cookies are cleared.
+    window.location.assign('/login')
   }
 
   return (
