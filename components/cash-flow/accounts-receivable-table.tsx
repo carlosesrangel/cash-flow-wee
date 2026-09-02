@@ -15,8 +15,11 @@ export type AccountsReceivableRow = {
   clienteNome: string | null
   valor: number | null
   dataVencimento?: string | null
+  dataEmissao?: string | null
   formaPagamento?: string | null
   parcela?: string | null
+  produto?: string | null
+  documento?: string | null
   classification: ClassifiedEntry
   agingBucket: AgingBucket | null
 }
@@ -116,6 +119,7 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                   <SortIcon field="cliente" />
                 </div>
               </th>
+              <th className="px-3 py-3 font-medium">Data</th>
               <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('vencimento')}>
                 <div className="flex items-center gap-2">
                   Vencimento
@@ -129,6 +133,7 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                 </div>
               </th>
               <th className="px-3 py-3 font-medium">Parcela</th>
+              <th className="px-3 py-3 font-medium">Produto</th>
               <th className="px-3 py-3 font-medium">Forma de pagamento</th>
               <th className="px-3 py-3 font-medium cursor-pointer hover:bg-muted" onClick={() => handleSort('aging')}>
                 <div className="flex items-center gap-2">
@@ -153,9 +158,11 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                   }`}
                 >
                   <td className="px-3 py-3 font-medium text-foreground">{row.clienteNome || '—'}</td>
+                  <td className="px-3 py-3">{row.dataEmissao ? formatDateOnlyBR(row.dataEmissao) : '—'}</td>
                   <td className="px-3 py-3">{formatDateOnlyBR(classification.date)}</td>
                   <td className="px-3 py-3 text-right font-mono">{row.valor != null ? formatBRL(row.valor) : '—'}</td>
                   <td className="px-3 py-3">{row.parcela || '—'}</td>
+                  <td className="px-3 py-3 max-w-56 truncate" title={row.produto ?? undefined}>{row.produto || '—'}</td>
                   <td className="px-3 py-3">{row.formaPagamento || '—'}</td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -194,6 +201,7 @@ export function AccountsReceivableTable({ rows, today }: { rows: AccountsReceiva
                   {row.valor != null ? formatBRL(row.valor) : '—'}
                 </p>
               </div>
+              <div className="mb-2 grid grid-cols-2 gap-1 text-xs text-muted-foreground"><span>Venda: {row.dataEmissao ? formatDateOnlyBR(row.dataEmissao) : '—'}</span><span>Parcela: {row.parcela || '—'}</span><span className="col-span-2 truncate">Produto: {row.produto || '—'}</span><span className="col-span-2 truncate">Pagamento: {row.formaPagamento || '—'}</span></div>
               <div className="flex items-center gap-2">
                 <Badge variant={classification.bucket === 'realizado' ? 'success' : 'secondary'} className="text-xs">
                   {BUCKET_LABEL[classification.bucket]}

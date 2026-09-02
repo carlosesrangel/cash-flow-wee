@@ -21,6 +21,7 @@ type MatchReasonCandidate = {
 export type MatchRow = {
   id: string
   status: MatchStatus
+  sumup_transaction_id?: string | null
   candidate_ids: string[]
   match_reason: { candidatos?: MatchReasonCandidate[] } | null
   olist_accounts_receivable: {

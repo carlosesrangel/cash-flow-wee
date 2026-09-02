@@ -6,6 +6,7 @@ import type { MatchRow } from '@/components/reconciliation/reconciliation-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { loadComparableUniverse } from '@/lib/reconciliation/comparable-universe'
 
 export default async function ReconciliacaoPage() {
   const member = await getCurrentMember()
@@ -15,12 +16,13 @@ export default async function ReconciliacaoPage() {
   }
 
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase
+  const [{ data, error }, universe] = await Promise.all([supabase
     .from('reconciliation_matches')
     .select(
-      'id, status, candidate_ids, match_reason, olist_accounts_receivable:olist_accounts_receivable_id (historico, numero_documento, valor, data_vencimento)'
+      'id, status, candidate_ids, match_reason, sumup_transaction_id, olist_accounts_receivable:olist_accounts_receivable_id (historico, numero_documento, valor, data_vencimento)'
     )
-    .order('status', { ascending: true })
+    .eq('org_id', member.orgId)
+    .order('status', { ascending: true }), loadComparableUniverse(member.orgId)])
 
   if (error) {
     throw new Error(`Falha ao carregar reconciliação: ${error.message}`)
@@ -34,7 +36,7 @@ export default async function ReconciliacaoPage() {
       />
       <Card>
         <CardContent className="pt-6">
-          <ReconciliationDashboard matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} />
+          <ReconciliationDashboard matches={(data ?? []) as unknown as MatchRow[]} canManage={canManageReconciliation(member.role)} universe={universe.report} sumupRows={universe.sumupRows} />
         </CardContent>
       </Card>
     </div>

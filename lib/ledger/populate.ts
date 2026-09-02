@@ -226,7 +226,7 @@ export async function populateLedgerFromOlistPayables(admin: SupabaseClient, org
 
 /** Populate the ledger from Olist receivables and reconciliation results. */
 export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, orgId: string) {
-  const [receivables, matches] = await Promise.all([
+  const [receivables, matches, contacts, orders, items] = await Promise.all([
     fetchAllPages<{
       id: string
       olist_id: number
@@ -240,11 +240,12 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       historico: string | null
       numero_documento: string | null
       forma_recebimento_nome: string | null
+      cliente_olist_id: number | null
     }>(
       (from, to) =>
         admin
           .from('olist_accounts_receivable')
-          .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico, numero_documento, forma_recebimento_nome')
+          .select('id, olist_id, situacao, valor, saldo, valor_pago, data_emissao, data_vencimento, data_liquidacao, historico, numero_documento, forma_recebimento_nome, cliente_olist_id')
           .eq('org_id', orgId)
           .range(from, to),
       'Failed to load olist_accounts_receivable for ledger'
@@ -262,7 +263,14 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
           .range(from, to),
       'Failed to load reconciliation_matches for ledger'
     ),
+    fetchAllPages<{ olist_id: number; nome: string | null }>((from, to) => admin.from('olist_contacts').select('olist_id, nome').eq('org_id', orgId).range(from, to), 'Failed to load Olist contacts for ledger metadata'),
+    fetchAllPages<{ id: string; cliente_olist_id: number | null; data: string | null }>((from, to) => admin.from('olist_orders').select('id, cliente_olist_id, data').eq('org_id', orgId).range(from, to), 'Failed to load Olist orders for ledger metadata'),
+    fetchAllPages<{ order_id: string; descricao_produto: string | null }>((from, to) => admin.from('olist_order_items').select('order_id, descricao_produto').eq('org_id', orgId).range(from, to), 'Failed to load Olist products for ledger metadata'),
   ])
+  const nameByClientId = new Map(contacts.map((contact) => [contact.olist_id, contact.nome]))
+  const productsByOrder = new Map<string, string[]>()
+  for (const item of items) if (item.descricao_produto) productsByOrder.set(item.order_id, [...(productsByOrder.get(item.order_id) ?? []), item.descricao_produto])
+  const orderProducts = orders.filter((order) => order.cliente_olist_id && order.data && productsByOrder.has(order.id)).map((order) => ({ clientId: order.cliente_olist_id as number, date: order.data as string, product: [...new Set(productsByOrder.get(order.id))].join(', ') }))
 
   const eventIds = matches.map((match) => match.sumup_transaction_event_id).filter((id): id is string => Boolean(id))
   const events = eventIds.length === 0
@@ -299,6 +307,10 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       : (Number.isFinite(paidValue) && paidValue > 0 ? paidValue : derivedPaid)
     const dueDate = receivable.data_vencimento || receivable.data_emissao || new Date().toISOString().split('T')[0]
     const event = match?.sumup_transaction_event_id ? eventById.get(match.sumup_transaction_event_id) : undefined
+    const closestOrder = receivable.cliente_olist_id && receivable.data_emissao
+      ? orderProducts.map((order) => ({ ...order, diff: Math.abs(new Date(order.date).getTime() - new Date(receivable.data_emissao as string).getTime()) })).filter((order) => order.clientId === receivable.cliente_olist_id && order.diff <= 3 * 86400000).sort((a, b) => a.diff - b.diff)[0]
+      : undefined
+    const parcela = receivable.historico?.match(/parcela\s+(\d+\/\d+)/i)?.[1] ?? null
     const metadata = {
       receivable_id: receivable.id,
       olist_id: receivable.olist_id,
@@ -308,6 +320,11 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       valor_pago: receivable.valor_pago,
       reconciliation_status: match?.status ?? 'nao_reconciliado',
       payment_method: receivable.forma_recebimento_nome,
+      forma_pagamento: receivable.forma_recebimento_nome,
+      cliente: receivable.cliente_olist_id ? nameByClientId.get(receivable.cliente_olist_id) ?? null : null,
+      produto: closestOrder?.product ?? null,
+      parcela,
+      documento: receivable.numero_documento,
     }
 
     // PIX and cash are factual Tiny settlements, independent from SumUp.
@@ -414,6 +431,8 @@ export async function populateLedgerFromManualEntries(admin: SupabaseClient, org
 export async function populateLedgerFromForecast(admin: SupabaseClient, orgId: string) {
   const { data: plan, error } = await admin.from('monthly_sales_plan').select('id, competence_month, amount').eq('org_id', orgId).gte('competence_month', firstDayOfNextMonth()).order('competence_month')
   if (error) throw error
+  const { error: supersedeError } = await admin.from('financial_ledger').update({ superseded_at: new Date().toISOString(), supersession_reason: 'forecast_projection_rebuilt' }).eq('org_id', orgId).eq('source', 'forecast').eq('status', 'projected').is('superseded_at', null)
+  if (supersedeError) throw supersedeError
   const entries: LedgerEntry[] = []
   for (const entry of plan || []) {
     const date = String(entry.competence_month)
@@ -526,6 +545,7 @@ export async function insertLedgerEntriesBatch(admin: SupabaseClient, entries: L
         .select('id, source, source_id, source_event_id, event_date')
         .eq('org_id', entries[0].org_id)
         .in('source', sources)
+        .is('superseded_at', null)
         .range(from, to),
     'Failed to load existing ledger entries for deduplication'
   )

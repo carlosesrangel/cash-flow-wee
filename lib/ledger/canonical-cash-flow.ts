@@ -14,6 +14,7 @@ type LedgerRow = {
   status: LedgerStatus
   nature: string
   description: string | null
+  metadata: Record<string, unknown> | null
 }
 
 /**
@@ -27,7 +28,7 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
     (from, to) =>
       admin
         .from('financial_ledger')
-        .select('id, source, source_id, event_date, amount, direction, status, nature, description')
+        .select('id, source, source_id, event_date, amount, direction, status, nature, description, metadata')
         .eq('org_id', orgId)
         .in('status', ['actual', 'scheduled', 'projected'])
         .is('superseded_at', null)
@@ -52,5 +53,12 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
     direction: row.direction,
     bucket: row.status === 'actual' ? 'realizado' : row.status === 'scheduled' ? 'contratado' : 'projetado',
     description: row.description || row.nature,
+    customer: typeof row.metadata?.cliente === 'string' ? row.metadata.cliente : null,
+    product: typeof row.metadata?.produto === 'string' ? row.metadata.produto : null,
+    installment: typeof row.metadata?.parcela === 'string' ? row.metadata.parcela : null,
+    paymentMethod: typeof row.metadata?.forma_pagamento === 'string' ? row.metadata.forma_pagamento : typeof row.metadata?.payment_method === 'string' ? row.metadata.payment_method : null,
+    supplier: typeof row.metadata?.fornecedor === 'string' ? row.metadata.fornecedor : null,
+    category: typeof row.metadata?.categoria === 'string' ? row.metadata.categoria : null,
+    document: typeof row.metadata?.documento === 'string' ? row.metadata.documento : null,
   }))
 }

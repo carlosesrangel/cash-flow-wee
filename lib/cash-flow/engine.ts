@@ -17,6 +17,13 @@ export type CashFlowEntry = {
   direction: 'entrada' | 'saida'
   bucket: CashBucket
   description: string | null
+  customer?: string | null
+  product?: string | null
+  installment?: string | null
+  paymentMethod?: string | null
+  supplier?: string | null
+  category?: string | null
+  document?: string | null
 }
 
 type ArRow = {

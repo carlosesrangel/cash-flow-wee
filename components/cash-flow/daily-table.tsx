@@ -72,22 +72,7 @@ export function DailyTable({ days, entries }: { days: CashFlowDay[]; entries: Ca
                       {dayEntries.length === 0 ? (
                         <p className="text-neutral-500">Nenhum lançamento neste dia.</p>
                       ) : (
-                        <ul className="space-y-1">
-                          {dayEntries.map((entry) => (
-                            <li key={entry.id} className="flex justify-between">
-                              <span>
-                                <span>{entry.description ?? entry.sourceId}</span>{' '}
-                                <span className="text-neutral-500">
-                                  ({entry.origin}, {entry.bucket})
-                                </span>
-                              </span>
-                              <span className={entry.direction === 'entrada' ? 'text-emerald-700' : 'text-red-700'}>
-                                {entry.direction === 'entrada' ? '+' : '-'}
-                                {formatBRL(entry.amount)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="overflow-x-auto"><table className="min-w-[720px] w-full text-xs"><thead className="border-b text-neutral-500"><tr><th className="px-2 py-2 text-left font-medium">Data</th><th className="px-2 py-2 text-left font-medium">Cliente / Fornecedor</th><th className="px-2 py-2 text-left font-medium">Produto / Categoria</th><th className="px-2 py-2 text-left font-medium">Parcela</th><th className="px-2 py-2 text-left font-medium">Meio / Documento</th><th className="px-2 py-2 text-right font-medium">Valor</th></tr></thead><tbody>{dayEntries.map((entry) => <tr key={entry.id} className="border-b last:border-0"><td className="px-2 py-2">{formatDateOnlyBR(entry.date)}</td><td className="px-2 py-2">{entry.direction === 'entrada' ? (entry.customer ?? entry.description ?? '—') : (entry.supplier ?? entry.description ?? '—')}</td><td className="px-2 py-2">{entry.direction === 'entrada' ? (entry.product ?? '—') : (entry.category ?? '—')}</td><td className="px-2 py-2">{entry.installment ?? '—'}</td><td className="px-2 py-2">{entry.direction === 'entrada' ? (entry.paymentMethod ?? '—') : (entry.document ?? '—')}</td><td className={`px-2 py-2 text-right font-mono ${entry.direction === 'entrada' ? 'text-emerald-700' : 'text-red-700'}`}>{entry.direction === 'entrada' ? '+' : '-'}{formatBRL(entry.amount)}</td></tr>)}</tbody></table></div>
                       )}
                     </td>
                   </tr>
