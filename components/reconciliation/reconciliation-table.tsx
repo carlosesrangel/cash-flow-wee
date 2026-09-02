@@ -23,7 +23,7 @@ export type MatchRow = {
   status: MatchStatus
   sumup_transaction_id?: string | null
   candidate_ids: string[]
-  match_reason: { candidatos?: MatchReasonCandidate[] } | null
+  match_reason: (Record<string, unknown> & { candidatos?: MatchReasonCandidate[]; v2_classification?: string }) | null
   olist_accounts_receivable: {
     historico: string | null
     numero_documento: string | null

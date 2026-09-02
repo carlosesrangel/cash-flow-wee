@@ -3,6 +3,7 @@ import { fetchAllPages, LINKED_STATUSES } from '@/lib/reconciliation/run'
 import { classifyAccountsReceivable, classifyAccountsPayable, type CashBucket } from '@/lib/cash-flow/classify'
 import { aggregateByDay, type CashFlowDay } from '@/lib/cash-flow/aggregate'
 import { shiftDateString } from '@/lib/cash-flow/dates'
+import { isVerifiedReconciliation } from '@/lib/reconciliation/verification'
 
 export type { CashBucket } from '@/lib/cash-flow/classify'
 
@@ -124,6 +125,8 @@ function findClosestProduct(
 // single object. The lookup below (`Array.isArray`) handles either shape.
 type RawReconciledDateRow = {
   olist_accounts_receivable_id: string
+  status: string
+  match_reason: Record<string, unknown> | null
   sumup_transaction_events: { due_date: string | null }[] | { due_date: string | null } | null
 }
 
@@ -138,7 +141,7 @@ export async function loadReconciledCashDates(admin: AdminClient, orgId: string)
     (from, to) =>
       admin
         .from('reconciliation_matches')
-        .select('olist_accounts_receivable_id, sumup_transaction_events!inner(due_date)')
+        .select('olist_accounts_receivable_id, status, match_reason, sumup_transaction_events!inner(due_date)')
         .eq('org_id', orgId)
         .in('status', LINKED_STATUSES)
         .not('sumup_transaction_event_id', 'is', null)
@@ -147,7 +150,7 @@ export async function loadReconciledCashDates(admin: AdminClient, orgId: string)
   )
 
   const map = new Map<string, string>()
-  for (const row of rows) {
+  for (const row of rows.filter((candidate) => isVerifiedReconciliation(candidate))) {
     const related = row.sumup_transaction_events
     const dueDate = Array.isArray(related) ? related[0]?.due_date : related?.due_date
     if (dueDate) map.set(row.olist_accounts_receivable_id, dueDate)

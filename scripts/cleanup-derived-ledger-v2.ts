@@ -4,20 +4,21 @@ import 'dotenv/config'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/reconciliation/run'
 import { firstDayOfNextMonth } from '@/lib/forecast/cutoff'
+import { isVerifiedReconciliation } from '@/lib/reconciliation/verification'
 
 const orgId = process.argv[2] ?? process.env.WEE_ORG_ID
 
-type Match = { olist_accounts_receivable_id: string; status: string }
+type Match = { olist_accounts_receivable_id: string; status: string; match_reason: Record<string, unknown> | null }
 type Ledger = { id: string; event_date: string; source: string; status: string; nature: string; source_event_id: string | null; metadata: Record<string, unknown> | null; superseded_at: string | null }
 
 async function main() {
   if (!orgId) throw new Error('Informe o org_id como primeiro argumento ou WEE_ORG_ID')
   const admin = createAdminSupabaseClient()
   const [matches, ledger] = await Promise.all([
-    fetchAllPages<Match>((from, to) => admin.from('reconciliation_matches').select('olist_accounts_receivable_id, status').eq('org_id', orgId).range(from, to), 'Falha ao carregar reconciliações'),
+    fetchAllPages<Match>((from, to) => admin.from('reconciliation_matches').select('olist_accounts_receivable_id, status, match_reason').eq('org_id', orgId).range(from, to), 'Falha ao carregar reconciliações'),
     fetchAllPages<Ledger>((from, to) => admin.from('financial_ledger').select('id, event_date, source, status, nature, source_event_id, metadata, superseded_at').eq('org_id', orgId).range(from, to), 'Falha ao carregar ledger'),
   ])
-  const resolvedArIds = new Set(matches.filter((row) => ['reconciliado_automaticamente', 'reconciliado_manualmente'].includes(row.status)).map((row) => row.olist_accounts_receivable_id))
+  const resolvedArIds = new Set(matches.filter((row) => isVerifiedReconciliation(row)).map((row) => row.olist_accounts_receivable_id))
   const nextMonth = firstDayOfNextMonth()
   const staleForecast = ledger.filter((row) => !row.superseded_at && row.source === 'forecast' && row.status === 'projected' && row.event_date < nextMonth)
   const staleCardAr = ledger.filter((row) => !row.superseded_at && row.source === 'olist' && row.nature === 'OLIST_AR_ACTUAL' && typeof row.metadata?.receivable_id === 'string' && resolvedArIds.has(row.metadata.receivable_id))

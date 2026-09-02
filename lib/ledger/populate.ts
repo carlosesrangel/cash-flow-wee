@@ -13,6 +13,7 @@ import { firstDayOfNextMonth } from '@/lib/forecast/cutoff'
 import { calculateProjectedCmv } from '@/lib/planning/canonical'
 import { calculateEffectiveSimplesTaxRate } from '@/lib/tax/simples-nacional'
 import { taxPaymentDate } from '@/lib/tax/engine'
+import { isVerifiedReconciliation } from '@/lib/reconciliation/verification'
 
 export interface LedgerEntry {
   org_id: string
@@ -254,11 +255,12 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
       olist_accounts_receivable_id: string
       status: string
       sumup_transaction_event_id: string | null
+      match_reason: Record<string, unknown> | null
     }>(
       (from, to) =>
         admin
           .from('reconciliation_matches')
-          .select('olist_accounts_receivable_id, status, sumup_transaction_event_id')
+          .select('olist_accounts_receivable_id, status, sumup_transaction_event_id, match_reason')
           .eq('org_id', orgId)
           .range(from, to),
       'Failed to load reconciliation_matches for ledger'
@@ -294,7 +296,7 @@ export async function populateLedgerFromOlistReceivables(admin: SupabaseClient, 
     const hasKnownBalance = Number.isFinite(balance) && balance >= 0
     const derivedPaid = hasKnownValue && hasKnownBalance ? Math.max(value - balance, 0) : null
     const match = matchByReceivableId.get(receivable.id)
-    const resolved = match?.status === 'reconciliado_automaticamente' || match?.status === 'reconciliado_manualmente'
+    const resolved = isVerifiedReconciliation(match)
     const paymentMethod = String(receivable.forma_recebimento_nome || '').trim().toLowerCase()
     const isPix = paymentMethod.includes('pix')
     const isCash = paymentMethod.includes('dinheiro') || paymentMethod.includes('espécie') || paymentMethod.includes('especie')

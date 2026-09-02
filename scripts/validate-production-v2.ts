@@ -8,6 +8,7 @@ import { firstDayOfNextMonth } from '@/lib/forecast/cutoff'
 import { taxPaymentDate } from '@/lib/tax/engine'
 import { PLAN_REFERENCE_VALUES, calculateProjectedCmv, isPlanEditable } from '@/lib/planning/canonical'
 import { reconcileTinyCards } from '@/lib/reconciliation/deterministic'
+import { isVerifiedReconciliation } from '@/lib/reconciliation/verification'
 
 const orgId = process.argv[2] ?? process.env.WEE_ORG_ID
 
@@ -110,7 +111,7 @@ async function main() {
   const cardTransactions = sumup.filter((row) => ['pos', 'ecom'].includes(normalized(row.payment_type)) && !normalized(row.entry_mode).includes('pix') && !['failed', 'failure', 'cancelled', 'canceled'].includes(normalized(row.status)))
   const successfulCardTransactions = cardTransactions.filter((row) => ['successful', 'success'].includes(normalized(row.status)) || ['successful', 'success'].includes(normalized(row.simple_status)))
 
-  const matchedAr = matches.filter((match) => match.status === 'reconciliado_automaticamente' || match.status === 'reconciliado_manualmente')
+  const matchedAr = matches.filter((match) => isVerifiedReconciliation(match))
   const matchedArIds = new Set(matchedAr.map((match) => match.olist_accounts_receivable_id))
   const matchedSumupIds = new Set(matchedAr.map((match) => match.sumup_transaction_id).filter((id): id is string => Boolean(id)))
   const storedReconciliation = {
@@ -145,11 +146,13 @@ async function main() {
   const rbt12Start = `${new Date(Date.UTC(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)) - 13, 1)).toISOString().slice(0, 7)}-01`
   const rbt12End = `${currentMonth}-01`
   const billedOrders = validOrders.filter((order) => Boolean(order.data_faturamento))
-  const revenueDate = (order: Order) => (order.data_faturamento || order.data || '').slice(0, 10)
-  const rbt12Orders = validOrders.filter((order) => revenueDate(order) >= rbt12Start && revenueDate(order) < rbt12End)
+  // RBT12 is a fiscal accrual metric. Never silently fall back to the order
+  // date when the source did not provide a billing date.
+  const revenueDate = (order: Order) => (order.data_faturamento || '').slice(0, 10)
+  const rbt12Orders = billedOrders.filter((order) => revenueDate(order) >= rbt12Start && revenueDate(order) < rbt12End)
   const rbt12 = sum(rbt12Orders.map((order) => ({ amount: order.valor_total_pedido })))
   const actualByMonth = new Map<string, number>()
-  for (const order of validOrders) { const month = monthOf(revenueDate(order)); if (month) actualByMonth.set(month, money((actualByMonth.get(month) || 0) + Number(order.valor_total_pedido || 0))) }
+  for (const order of billedOrders) { const month = monthOf(revenueDate(order)); if (month) actualByMonth.set(month, money((actualByMonth.get(month) || 0) + Number(order.valor_total_pedido || 0))) }
   const taxYear2026Month = [...actualByMonth.keys()].filter((month) => month.startsWith('2026-')).sort().pop() || '2026-09'
   const taxRevenue = actualByMonth.get(taxYear2026Month) || 0
   const taxInfo = calculateEffectiveSimplesTaxRate(rbt12, 2026)
@@ -182,7 +185,7 @@ async function main() {
     LEDGER_PIX: { COUNT: ledgerPix.length, VALUE: sum(ledgerPix) },
     LEDGER_CASH: { COUNT: ledgerCash.length, VALUE: sum(ledgerCash) },
     TINY_SUMUP_RECONCILIATION: { STORED: storedReconciliation, DETERMINISTIC: { MATCHED: deterministicMatched.length, MATCHED_VALUE: deterministicMatchedValue, UNMATCHED_TINY: deterministic.filter((row) => row.status === 'UNMATCHED_TINY').length, UNMATCHED_SUMUP: deterministic.filter((row) => row.status === 'UNMATCHED_SUMUP').length, AMBIGUOUS: deterministic.filter((row) => row.status === 'AMBIGUOUS').length, MATCH_RATE_COUNT: deterministicTinyValue ? deterministicMatched.length / deterministicInput.length : 0, MATCH_RATE_VALUE: deterministicTinyValue ? deterministicMatchedValue / deterministicTinyValue : 0, VALUE_VARIANCE: money(deterministicTinyValue - deterministicSumupValue) } },
-    RBT12: { PERIOD: `${rbt12Start.slice(0, 7)}..${rbt12End.slice(0, 7)} (exclusive)`, MONTH_COUNT: new Set(rbt12Orders.map((order) => monthOf(revenueDate(order)))).size, GROSS_REVENUE: rbt12, SOURCE_COVERAGE: { valid_orders: validOrders.length, with_billing_date: billedOrders.length, billing_date_coverage: validOrders.length ? billedOrders.length / validOrders.length : 0 } },
+    RBT12: { PERIOD: `${rbt12Start.slice(0, 7)}..${rbt12End.slice(0, 7)} (exclusive)`, MONTH_COUNT: new Set(rbt12Orders.map((order) => monthOf(revenueDate(order)))).size, GROSS_REVENUE: rbt12, SOURCE_COVERAGE: { valid_orders: validOrders.length, with_billing_date: billedOrders.length, billing_date_coverage: validOrders.length ? billedOrders.length / validOrders.length : 0, fallback_used: false } },
     TAX_2026_EXAMPLE: taxExample,
     TAX_2027_BOUNDARY: { DEC_2026_PAYMENT_DATE: taxPaymentDate(2026, 12), JAN_2027_PAYMENT_DATE: taxPaymentDate(2027, 1), PURE_SIMPLES_RATE_SAME_AS_2026: tax2027.aliquota_efetiva === taxInfo.aliquota_efetiva, REGIME: 'SIMPLES_NACIONAL_PURO', BASE: 'data_faturamento; recebimento SumUp não é base fiscal' },
     FORECAST: { FIRST_ALLOWED_CASH_DATE: nextMonth, FORECAST_CURRENT_MONTH: forecastCurrentOrPast, FORECAST_FUTURE_ROWS: forecastRows.filter((row) => row.event_date >= nextMonth).length },
