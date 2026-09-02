@@ -38,4 +38,12 @@ describe('OlistCard', () => {
     expect(screen.queryByRole('button', { name: 'Sincronizar agora' })).toBeNull()
     expect(screen.getByText('Apenas administradores podem gerenciar esta integração.')).toBeTruthy()
   })
+
+  it('prioritizes the reauthorization state over the last failed sync', () => {
+    render(<OlistCard status="precisa_reautorizar" connectedAt="2026-01-01T00:00:00Z" canManage lastSyncStatus="failed" />)
+
+    expect(screen.getByText('Status: Autorização expirada')).toBeTruthy()
+    expect(screen.getByText(/Integração requer reautorização/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Reconectar' })).toBeTruthy()
+  })
 })

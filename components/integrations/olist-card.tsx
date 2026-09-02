@@ -88,12 +88,12 @@ export function OlistCard({
   }, [autoSync])
 
   const needsConnect = status === 'desconectado' || status === 'precisa_reautorizar'
-  const syncLabel = lastSyncStatus === 'failed'
-    ? 'Erro de sincronização'
-    : lastSyncStatus === 'running'
-      ? 'Sincronizando'
-      : status === 'precisa_reautorizar'
-        ? 'Autorização expirada'
+  const syncLabel = status === 'precisa_reautorizar'
+    ? 'Autorização expirada'
+    : lastSyncStatus === 'failed'
+      ? 'Erro de sincronização'
+      : lastSyncStatus === 'running'
+        ? 'Sincronizando'
         : STATUS_LABEL[status]
 
   return (
