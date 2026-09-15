@@ -1,3 +1,5 @@
+vi.mock('@/lib/integrations/lock', () => ({ withIntegrationLock: vi.fn((_o, _r, _s, work) => work()) }))
+vi.mock('@/lib/integrations/checkpoint', () => ({ loadSyncCheckpoint: vi.fn().mockResolvedValue(new Date(Date.now() - 86400000)) }))
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('@/lib/sumup/sync/transactions', () => ({ syncSumupTransactions: vi.fn().mockResolvedValue({ received: 3 }) }))
@@ -57,7 +59,7 @@ describe('runSumupSync', () => {
     expect(syncSumupPayouts).toHaveBeenLastCalledWith(ORG_ID, { windowDays: 3650 })
 
     await runSumupSync(ORG_ID, 'incremental')
-    expect(syncSumupPayouts).toHaveBeenLastCalledWith(ORG_ID, {})
+    expect(syncSumupPayouts).toHaveBeenLastCalledWith(ORG_ID, { windowDays: 90 })
   })
 
   it('marks the run failed and rethrows when a sync function throws', async () => {

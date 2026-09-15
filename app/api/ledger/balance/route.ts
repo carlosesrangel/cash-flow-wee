@@ -1,3 +1,6 @@
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
+import { buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { fetchAllPages } from '@/lib/reconciliation/run'
 /**
  * GET /api/ledger/balance
  *
@@ -13,17 +16,22 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getCurrentMember } from '@/lib/auth/session'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
+  const member = await getCurrentMember()
+  if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const requestedOrgId = req.nextUrl.searchParams.get('org_id')
+  if (requestedOrgId && requestedOrgId !== member.orgId) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+  }
+
   try {
     const admin = createAdminSupabaseClient()
 
-    // For development: extract org_id from query param
-    const orgId = req.nextUrl.searchParams.get('org_id')
-    if (!orgId) {
-      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
-    }
+    const orgId = member.orgId
     const searchParams = req.nextUrl.searchParams
     const fromDate = searchParams.get('from_date')
     const toDate = searchParams.get('to_date')
@@ -36,6 +44,7 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('org_id', orgId)
       .in('status', includeStatus)
+      .is('superseded_at', null)
       .order('event_date', { ascending: true })
 
     if (fromDate) {
@@ -45,22 +54,14 @@ export async function GET(req: NextRequest) {
       query = query.lte('event_date', toDate)
     }
 
-    const { data: entries, error } = await query
-
-    if (error) {
-      throw error
-    }
-
-    // Calculate running balance
-    let runningBalance = 0
-    const withBalance = (entries || []).map((entry) => {
-      const amount = entry.direction === 'entrada' ? entry.amount : -entry.amount
-      runningBalance += amount
-      return {
-        ...entry,
-        balance_after: runningBalance,
-      }
-    })
+    const entries = await fetchAllPages<any>((a, b) => query.range(a, b), 'Failed to load ledger')
+    const allEntries = (await loadCanonicalCashFlow(orgId)).filter(e => includeStatus.includes(e.bucket === 'realizado' ? 'actual' : e.bucket === 'contratado' ? 'scheduled' : 'projected'))
+    const end = toDate ?? new Date().toISOString().slice(0, 10)
+    const start = fromDate ?? entries[0]?.event_date ?? end
+    const days = await buildCashFlowDays(orgId, start, end, allEntries)
+    const closing = new Map(days.map(d => [d.date, d.saldoFinal]))
+    // Anchor is a closing daily observation, so balance_after is the day's reconciled closing balance.
+    const withBalance = entries.map(entry => ({ ...entry, balance_after: closing.get(entry.event_date) ?? null }))
 
     // Group results
     let grouped = withBalance
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
     const summary = {
       total_entrada: withBalance.reduce((s, e) => s + (e.direction === 'entrada' ? e.amount : 0), 0),
       total_saida: withBalance.reduce((s, e) => s + (e.direction === 'saida' ? e.amount : 0), 0),
-      net_balance: withBalance.length > 0 ? withBalance[withBalance.length - 1].balance_after : 0,
+      net_balance: days.at(-1)?.saldoFinal ?? null,
       count_entries: withBalance.length,
       first_date: withBalance.length > 0 ? withBalance[0].event_date : null,
       last_date: withBalance.length > 0 ? withBalance[withBalance.length - 1].event_date : null,

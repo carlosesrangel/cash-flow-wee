@@ -1,9 +1,11 @@
 import { getCurrentMember } from '@/lib/auth/session'
+import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNavToggle } from '@/components/layout/mobile-nav-toggle'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const member = await getCurrentMember()
+  if (!member) redirect('/login?error=no_membership')
 
   return (
     <div className="flex min-h-screen">

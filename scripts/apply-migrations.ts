@@ -20,6 +20,8 @@ const pool = new Pool({ connectionString: databaseUrl })
 const MIGRATIONS = [
   '0031_canonical_planning_and_ledger_lineage.sql',
   '0032_rfv_order_source.sql',
+  '0033_accept_organization_invitations.sql',
+  '0034_sync_reliability.sql',
 ]
 
 async function applyMigrations() {

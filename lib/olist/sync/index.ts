@@ -1,3 +1,5 @@
+import { withIntegrationLock } from '@/lib/integrations/lock'
+import { loadSyncCheckpoint } from '@/lib/integrations/checkpoint'
 import { startSyncRun, finishSyncRun } from '@/lib/olist/sync/run-context'
 import { syncSellers } from '@/lib/olist/sync/sellers'
 import { syncPaymentMethods } from '@/lib/olist/sync/payment-methods'
@@ -10,9 +12,13 @@ import { runReconciliation } from '@/lib/reconciliation'
 import { refreshDerivedFinancialData } from '@/lib/sync/derived-refresh'
 
 export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean } = {}): Promise<void> {
+  return withIntegrationLock(orgId, 'financial-sync', 10800, () => executeSync(orgId, mode, options))
+}
+
+async function executeSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean }): Promise<void> {
+  const since = mode === 'incremental' ? await loadSyncCheckpoint(orgId, 'olist') : undefined
   const runId = await startSyncRun(orgId, 'olist')
 
-  const since = mode === 'incremental' ? new Date(Date.now() - 24 * 60 * 60 * 1000) : undefined
   const sinceOptions = since ? { since } : {}
 
   let received = 0
@@ -28,7 +34,7 @@ export async function runOlistSync(orgId: string, mode: 'initial' | 'incremental
     // imports all open/closed AP/AR, not just the last 90 days by due date. Aged-out
     // accounts (>90 days overdue, still open) may still not get status refreshes on
     // later incremental syncs — see docs/assumptions.md, "Riscos conhecidos (Fase 2)".
-    const apArOptions = mode === 'initial' ? { windowDays: 3650 } : {}
+    const apArOptions = { windowDays: 3650 } // Revisit old obligations too: the API has no updated-since filter.
     const accountsPayable = await syncAccountsPayable(orgId, apArOptions)
     const accountsReceivable = await syncAccountsReceivable(orgId, apArOptions)
 

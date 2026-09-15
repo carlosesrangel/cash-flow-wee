@@ -1,6 +1,7 @@
 'use client'
+/* eslint-disable react-hooks/set-state-in-effect -- auth callback errors come from the browser URL */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { loginSchema } from '@/lib/validation/auth'
@@ -11,6 +12,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    const message = new URLSearchParams(window.location.search).get('error')
+    if (message === 'invite_invalid') {
+      setError('Este convite é inválido ou expirou. Solicite um novo convite.')
+    } else if (message === 'auth_callback') {
+      setError('Não foi possível validar o link de acesso. Tente novamente.')
+    } else if (message === 'no_membership') {
+      setError('Seu usuário ainda não foi associado a uma organização. Peça ao administrador para enviar um convite pelo WEE.')
+    }
+  }, [])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()

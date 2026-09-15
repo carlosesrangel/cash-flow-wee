@@ -17,6 +17,12 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+concurrency:
+  group: production-financial-writes
+  cancel-in-progress: false
+
 jobs:
   initial-load:
     name: Carregar dados iniciais
@@ -47,17 +53,19 @@ jobs:
           OLIST_STATE_SECRET: ${{ secrets.OLIST_STATE_SECRET }}
           SUMUP_API_KEY: ${{ secrets.SUMUP_API_KEY }}
           SUMUP_MERCHANT_CODE: ${{ secrets.SUMUP_MERCHANT_CODE }}
+          INPUT_INTEGRATION: ${{ inputs.integration }}
+          INPUT_ORG: ${{ inputs.org_id }}
         run: |
           ARGS=""
 
           # Adicionar flag de integração específica, se selecionada
-          if [ "${{ github.event.inputs.integration }}" != "both" ]; then
-            ARGS="--${{ github.event.inputs.integration }}"
+          if [ "$INPUT_INTEGRATION" != "both" ]; then
+            ARGS="--$INPUT_INTEGRATION"
           fi
 
           # Adicionar org específica, se fornecida
-          if [ -n "${{ github.event.inputs.org_id }}" ]; then
-            ARGS="$ARGS --org ${{ github.event.inputs.org_id }}"
+          if [ -n "$INPUT_ORG" ]; then
+            ARGS="$ARGS --org $INPUT_ORG"
           fi
 
           npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-initial-load.ts $ARGS
@@ -114,53 +122,3 @@ jobs:
             console.log('━'.repeat(80));
           })();
           "
-
-      - name: Notificar sucesso (Slack - opcional)
-        if: success()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "ℹ️ Slack webhook não configurado"
-            exit 0
-          fi
-
-          curl -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            -d '{
-              "text": "✅ Carga Inicial de Dados Concluída",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*✅ Carga Inicial de Dados*\n*Status:* Concluído com sucesso\n*Integração:* ${{ github.event.inputs.integration }}\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)"
-                  }
-                }
-              ]
-            }'
-
-      - name: Notificar falha (Slack - opcional)
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "ℹ️ Slack webhook não configurado"
-            exit 0
-          fi
-
-          curl -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            -d '{
-              "text": "❌ Carga Inicial de Dados Falhou",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*❌ Carga Inicial de Dados Falhou*\n*Integração:* ${{ github.event.inputs.integration }}\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos>"
-                  }
-                }
-              ]
-            }'

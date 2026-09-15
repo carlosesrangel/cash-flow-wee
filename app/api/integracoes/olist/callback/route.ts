@@ -1,3 +1,4 @@
+import { withIntegrationLock } from '@/lib/integrations/lock'
 import { NextResponse } from 'next/server'
 import { verifyState } from '@/lib/olist/state'
 import { exchangeCodeForTokens } from '@/lib/olist/oauth'
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    await withIntegrationLock(state.orgId, 'olist-oauth', 60, async () => {
     const tokens = await exchangeCodeForTokens(code)
     const admin = createAdminSupabaseClient()
 
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
     )
 
     if (error) throw error
+    })
   } catch (err) {
       // Error suppressed
     return NextResponse.redirect(`${origin}/integracoes?olist_erro=falha_conexao`)

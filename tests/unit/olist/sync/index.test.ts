@@ -1,3 +1,5 @@
+vi.mock('@/lib/integrations/lock', () => ({ withIntegrationLock: vi.fn((_o, _r, _s, work) => work()) }))
+vi.mock('@/lib/integrations/checkpoint', () => ({ loadSyncCheckpoint: vi.fn().mockResolvedValue(new Date(Date.now() - 86400000)) }))
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('@/lib/olist/sync/sellers', () => ({ syncSellers: vi.fn().mockResolvedValue({ received: 1 }) }))
@@ -59,12 +61,12 @@ describe('runOlistSync', () => {
     expect(syncAccountsReceivable).toHaveBeenCalledWith(ORG_ID, { windowDays: 3650 })
   })
 
-  it('passes the default (90-day) window to AP/AR sync on an incremental sync', async () => {
+  it('passes the full-history window to AP/AR sync on an incremental sync', async () => {
     const { runOlistSync } = await import('@/lib/olist/sync/index')
     await runOlistSync(ORG_ID, 'incremental')
 
-    expect(syncAccountsPayable).toHaveBeenCalledWith(ORG_ID, {})
-    expect(syncAccountsReceivable).toHaveBeenCalledWith(ORG_ID, {})
+    expect(syncAccountsPayable).toHaveBeenCalledWith(ORG_ID, { windowDays: 3650 })
+    expect(syncAccountsReceivable).toHaveBeenCalledWith(ORG_ID, { windowDays: 3650 })
   })
 
   it('does not pass a since date on an initial sync', async () => {

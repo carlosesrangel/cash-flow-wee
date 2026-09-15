@@ -20,6 +20,11 @@ npm run check:env
 
 ### Supabase (Database & Auth)
 
+- **NEXT_PUBLIC_SITE_URL**
+  - Description: public URL of the WEE app, used as the fallback base for invitation links
+  - Example: `https://wee-cash-flow.vercel.app`
+  - Required for: stable invitation links when the request comes from a preview or alternate hostname
+
 These variables are **required** for the application to run.
 
 - **NEXT_PUBLIC_SUPABASE_URL**
@@ -89,6 +94,11 @@ Enable payment method synchronization from SumUp.
   - Description: Your SumUp merchant code
   - Format: Usually alphanumeric identifier
   - Required for: Merchant account identification
+
+- **SUMUP_ORG_ID**
+  - Description: Organization UUID that owns the SumUp API key
+  - Type: Secret/configuration
+  - Required for: GitHub Actions sync targeting
 
 ### Database Migrations
 

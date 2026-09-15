@@ -1,3 +1,6 @@
+import { buildCashFlowDays } from './engine'
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
+import { aggregateByMonth } from './aggregate'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/reconciliation/run'
 import { formatBRL } from '@/lib/format/currency'
@@ -19,6 +22,7 @@ export type SummaryMatrix = {
   columns: string[]
   rows: Array<{ label: string; values: number[]; total: number; details: SummaryDetail[][] }>
   totalSaidas: number[]
+  saldoFinal?: Array<number | null>
   fluxoLiquido: number[]
 }
 
@@ -84,8 +88,11 @@ export async function loadSummaryMatrix(orgId: string, period: 'month' | 'year',
   const admin = suppliedClient ?? createAdminSupabaseClient()
   const start = period === 'month' ? `${selected}-01` : `${selected}-01-01`
   const end = period === 'month' ? `${selected}-${String(new Date(Number(selected.slice(0, 4)), Number(selected.slice(5, 7)), 0).getDate()).padStart(2, '0')}` : `${selected}-12-31`
-  const rows = await fetchAllPages<SummaryLedgerRow>((from, to) => admin.from('financial_ledger').select('event_date, amount, direction, nature, status, metadata, description').eq('org_id', orgId).is('superseded_at', null).gte('event_date', start).lte('event_date', end).range(from, to), 'Falha ao carregar resumo do fluxo de caixa')
-  return buildSummaryMatrix(rows, period, selected)
+  const entries = await loadCanonicalCashFlow(orgId)
+  const rows: SummaryLedgerRow[] = entries.map(e => ({ event_date: e.date, amount: e.amount, direction: e.direction, nature: e.nature ?? 'MANUAL_ENTRY', status: e.bucket === 'projetado' ? 'projected' : e.bucket === 'contratado' ? 'scheduled' : 'actual', metadata: { categoria: e.category, cliente: e.customer, fornecedor: e.supplier, produto: e.product, parcela: e.installment, forma_pagamento: e.paymentMethod, documento: e.document }, description: e.description }))
+  const matrix = buildSummaryMatrix(rows, period, selected)
+  const days = await buildCashFlowDays(orgId, start, end, entries)
+  return { ...matrix, saldoFinal: period === 'month' ? days.map(d => d.saldoFinal) : aggregateByMonth(days).map(m => m.saldoFinal) }
 }
 
 export function formatSummaryComposition(details: SummaryDetail[]) {

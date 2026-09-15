@@ -33,8 +33,6 @@ import 'dotenv/config'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { runOlistSync } from '@/lib/olist/sync'
 
-const ACTIVE_SYNC_STALENESS_MS = 10 * 60 * 1000
-
 function parseArgs() {
   const args = process.argv.slice(2)
   const orgIndex = args.indexOf('--org')
@@ -48,6 +46,9 @@ function parseArgs() {
 
 async function main() {
   const { orgId, forcedMode, skipDerivedRefresh } = parseArgs()
+  if (forcedMode && !['initial', 'incremental'].includes(forcedMode)) throw new Error('Invalid sync mode')
+  const required = ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OLIST_CLIENT_ID', 'OLIST_CLIENT_SECRET']
+  for (const key of required) if (!process.env[key]) throw new Error(`Missing required secret: ${key}`)
   const admin = createAdminSupabaseClient()
 
   let connections: Array<{ org_id: string }>
@@ -58,36 +59,18 @@ async function main() {
       .from('integration_connections')
       .select('org_id')
       .eq('provider', 'olist')
-      .eq('status', 'conectado')
+      .neq('status', 'desconectado')
     if (error) throw new Error(`Erro ao buscar conexões: ${error.message}`)
     connections = data ?? []
   }
 
-  if (connections.length === 0) {
-    console.log('ℹ️  Nenhuma organização com Olist conectada.')
-    return
-  }
+  if (connections.length === 0) throw new Error('No configured integration: synchronization did not run')
 
   console.log(`📊 ${connections.length} organização(ões) para sincronizar\n`)
 
   let failed = 0
 
   for (const conn of connections) {
-    const cutoff = new Date(Date.now() - ACTIVE_SYNC_STALENESS_MS).toISOString()
-    const { data: activeSync } = await admin
-      .from('sync_runs')
-      .select('id')
-      .eq('org_id', conn.org_id)
-      .eq('status', 'running')
-      .gte('started_at', cutoff)
-      .limit(1)
-      .maybeSingle()
-
-    if (activeSync) {
-      console.log(`⏳ Sync já em andamento para ${conn.org_id}, pulando`)
-      continue
-    }
-
     const { data: priorSuccess } = await admin
       .from('sync_runs')
       .select('id')

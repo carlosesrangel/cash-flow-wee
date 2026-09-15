@@ -6,7 +6,7 @@ export function PaymentsToggle() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const isEnabled = searchParams.get('payments') !== 'false'
+  const isEnabled = searchParams.get('payments') === 'true'
 
   const handleToggle = () => {
     const params = new URLSearchParams(searchParams)

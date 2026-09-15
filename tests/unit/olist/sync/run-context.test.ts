@@ -27,7 +27,8 @@ describe('startSyncRun / finishSyncRun', () => {
   it('updates the row with final counts on finish', async () => {
     const eq = vi.fn().mockResolvedValue({ error: null })
     const update = vi.fn().mockReturnValue({ eq })
-    const from = vi.fn().mockReturnValue({ update })
+    const select = vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { started_at: '2026-09-15T00:00:00Z', records_created: 8, records_updated: 2 }, error: null }) })) }))
+    const from = vi.fn().mockReturnValue({ update, select })
     vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
 
     const { finishSyncRun } = await import('@/lib/olist/sync/run-context')

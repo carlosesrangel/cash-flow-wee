@@ -10,17 +10,22 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getCurrentMember } from '@/lib/auth/session'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
+  const member = await getCurrentMember()
+  if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const requestedOrgId = req.nextUrl.searchParams.get('org_id')
+  if (requestedOrgId && requestedOrgId !== member.orgId) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+  }
+
   try {
     const admin = createAdminSupabaseClient()
 
-    // For development: extract org_id from query param
-    const orgId = req.nextUrl.searchParams.get('org_id')
-    if (!orgId) {
-      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
-    }
+    const orgId = member.orgId
     const searchParams = req.nextUrl.searchParams
     const paymentTypeFilter = searchParams.get('payment_type')
     const minConfiabilidade = searchParams.get('min_confiabilidade')

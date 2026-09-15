@@ -56,7 +56,9 @@ export async function sumupFetch<T>(
       })
     } catch (error) {
       recordExternalFailure({ provider: 'sumup', endpoint: url.toString(), startedAt, error })
-      throw error
+      if (attempt === MAX_RETRIES - 1) throw new Error(`SumUp network request failed for ${path}`)
+      await sleep(2 ** attempt * 500)
+      continue
     }
 
     if (response.ok) {

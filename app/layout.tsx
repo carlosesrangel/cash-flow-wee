@@ -34,7 +34,10 @@ export const metadata: Metadata = {
   title: "WEE Cash Flow & Business Intelligence Platform",
   description: "Plataforma de gestão de fluxo de caixa, tesouraria e inteligência financeira para pequenas empresas.",
   icons: {
-    icon: [{ url: '/favicon.png', type: 'image/png' }],
+    icon: [
+      { url: '/favicon.png', type: 'image/png', sizes: '1224x1224' },
+      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
+    ],
     shortcut: '/favicon.png',
     apple: '/favicon.png',
   },

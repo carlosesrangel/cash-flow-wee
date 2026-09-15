@@ -11,7 +11,7 @@ const day = (date: string, saldoFinal: number): CashFlowDay => ({
 })
 
 describe('calculateDashboardKpis', () => {
-  it('is the golden dashboard calculation over the canonical day series', () => {
+  it('uses the canonical closing balance instead of adding movements to an anchor again', () => {
     const result = calculateDashboardKpis(
       [day('2026-09-01', 100), day('2026-09-15', 121), day('2026-10-01', 142)],
       '2026-09-01',
@@ -20,8 +20,8 @@ describe('calculateDashboardKpis', () => {
 
     expect(result).toEqual({
       saldoAtual: 4000,
-      entradas30: 90,
-      saidas30: 27,
+      entradas30: 120,
+      saidas30: 30,
       saldoEm30: 142,
       entradasRealizadas: 30,
       entradasContratadasProjetadas: 150,

@@ -1,14 +1,13 @@
+vi.mock('@/lib/integrations/lock', () => ({ withIntegrationLock: vi.fn((_o, _r, _s, work) => work()) }))
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminSupabaseClient: vi.fn(),
 }))
-vi.mock('@/lib/olist/oauth', () => ({
-  refreshTokens: vi.fn(),
-}))
+vi.mock('@/lib/olist/oauth', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/olist/oauth')>(), refreshTokens: vi.fn() }))
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { refreshTokens } from '@/lib/olist/oauth'
+import { refreshTokens, OAuthTokenError } from '@/lib/olist/oauth'
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -84,7 +83,7 @@ describe('getValidConnection', () => {
       status: 'conectado',
     })
     vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never)
-    vi.mocked(refreshTokens).mockRejectedValue(new Error('invalid_grant'))
+    vi.mocked(refreshTokens).mockRejectedValue(new OAuthTokenError('invalid_grant', 400))
 
     const { getValidConnection } = await import('@/lib/olist/client')
     const result = await getValidConnection(ORG_ID)
@@ -154,7 +153,7 @@ describe('getValidConnection', () => {
     const select = vi.fn().mockReturnValue({ eq: eq1 })
     const from = vi.fn().mockReturnValue({ select, update })
     vi.mocked(createAdminSupabaseClient).mockReturnValue({ from } as never)
-    vi.mocked(refreshTokens).mockRejectedValue(new Error('invalid_grant'))
+    vi.mocked(refreshTokens).mockRejectedValue(new OAuthTokenError('invalid_grant', 400))
 
     const { getValidConnection } = await import('@/lib/olist/client')
 

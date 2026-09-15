@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import { AuthEntry } from '@/components/auth/auth-entry'
 
 export default function Home() {
-  redirect('/visao-geral')
+  return <AuthEntry />
 }

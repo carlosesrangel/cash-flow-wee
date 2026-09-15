@@ -1,23 +1,43 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { CashFlowPeriodFilter } from '@/components/filters/cash-flow-period-filter'
+import { getCashFlowDateRange } from '@/lib/cash-flow/date-presets'
+import { toLocalDateParam } from '@/lib/integrations/date'
 import { formatBRL } from '@/lib/format/currency'
 import { formatDateOnlyBR } from '@/lib/format/date'
-import type { PayableCandidate, PaymentScenario, PlannedPayment } from '@/lib/payments/engine'
+import type { PayableCandidate, PaymentScenario } from '@/lib/payments/engine'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 
-type Impact = { contasSelecionadas: number; totalSelecionado: number; saldoAntes: number; pagamentos: number; saldoDepois: number }
+type Impact = { contasSelecionadas: number; totalSelecionado: number; saldoAntes: number | null; pagamentos: number; saldoDepois: number | null }
 type ScenarioImpact = { saldoMinimoAntes: number; saldoMinimoDepois: number; dataSaldoMinimo: string; diasNegativosAntes: number; diasNegativosDepois: number; melhoria: boolean }
 const DOTS = { gray: 'bg-neutral-400', red: 'bg-red-500', yellow: 'bg-amber-400', green: 'bg-emerald-500' } as const
 
 export default function PlanejarpagamentosPage() {
+  return <Suspense fallback={<p>Carregando planejamento...</p>}><PaymentPlanning /></Suspense>
+}
+function PaymentPlanning() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const today = toLocalDateParam(new Date())
+  const defaults = getCashFlowDateRange('proximos-30', today)
+  const from = searchParams.get('from') ?? defaults[0]
+  const to = searchParams.get('to') ?? defaults[1]
+  const invalidPeriod = Boolean(from && to && from > to)
+  const periodQuery = new URLSearchParams({ from, to }).toString()
+  const requestId = useRef(0)
+  const [page, setPage] = useState(1)
+  function changePeriod(start: string, end: string) {
+    const params = new URLSearchParams(searchParams)
+    params.set('from', start); params.set('to', end)
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }
   const [candidates, setCandidates] = useState<PayableCandidate[]>([])
-  const [payments, setPayments] = useState<PlannedPayment[]>([])
   const [scenarios, setScenarios] = useState<Array<{ scenario: PaymentScenario; adjustments: any[] }>>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [plannedDates, setPlannedDates] = useState<Record<string, string>>({})
@@ -29,36 +49,45 @@ export default function PlanejarpagamentosPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    void loadData()
-  }, [])
-
-  useEffect(() => {
-    const apIds = Array.from(selectedIds)
-    void fetch('/api/payments/impact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apIds }) })
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((data) => setImpact(data?.impact ?? null))
-      .catch(() => setImpact(null))
-  }, [selectedIds])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    const id = ++requestId.current
     setError(null)
+    setSelectedIds(new Set())
+    setImpact(null)
+    setScenarioImpact(null)
+    setSelectedScenario(null)
+    setCandidates([])
+    setPage(1)
+    if (invalidPeriod) { setLoading(false); return }
+    setLoading(true)
     try {
-      const [paymentsResponse, scenariosResponse] = await Promise.all([fetch('/api/payments/planned'), fetch('/api/payments/scenarios')])
-      if (!paymentsResponse.ok || !scenariosResponse.ok) throw new Error('Não foi possível carregar o planejamento.')
+      const [paymentsResponse, scenariosResponse] = await Promise.all([fetch(`/api/payments/planned?${periodQuery}`), fetch('/api/payments/scenarios')])
+      if (!paymentsResponse.ok || !scenariosResponse.ok) throw new Error('N?o foi poss?vel carregar o planejamento.')
       const paymentsData = await paymentsResponse.json()
       const scenariosData = await scenariosResponse.json()
+      if (id !== requestId.current) return
       const nextCandidates = (paymentsData.candidates ?? []) as PayableCandidate[]
       setCandidates(nextCandidates)
-      setPayments(paymentsData.payments ?? [])
       setScenarios(scenariosData.scenarios ?? [])
-      setPlannedDates(Object.fromEntries(nextCandidates.map((candidate) => [candidate.apId, candidate.plannedDate ?? ''])))
+      setPlannedDates(Object.fromEntries(nextCandidates.map(candidate => [candidate.apId, candidate.plannedDate ?? ''])))
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o planejamento.')
+      if (id === requestId.current) setError(loadError instanceof Error ? loadError.message : 'Falha ao carregar.')
     } finally {
-      setLoading(false)
+      if (id === requestId.current) setLoading(false)
     }
-  }
+  }, [periodQuery, invalidPeriod])
+  // The loader updates local state after the asynchronous request completes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadData(); return () => { requestId.current++ } }, [loadData])
+  useEffect(() => {
+    const controller = new AbortController()
+    if (invalidPeriod) return
+    void fetch('/api/payments/impact', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apIds: Array.from(selectedIds), from, to }) })
+      .then(async response => response.ok ? response.json() : null)
+      .then(data => { if (!controller.signal.aborted) setImpact(data?.impact ?? null) })
+      .catch(() => { if (!controller.signal.aborted) setImpact(null) })
+    return () => controller.abort()
+  }, [selectedIds, from, to, invalidPeriod])
 
   const selectedCandidates = useMemo(() => candidates.filter((candidate) => selectedIds.has(candidate.apId)), [candidates, selectedIds])
   const totalSelected = useMemo(() => selectedCandidates.reduce((sum, candidate) => sum + candidate.saldo, 0), [selectedCandidates])
@@ -94,15 +123,16 @@ export default function PlanejarpagamentosPage() {
   async function selectScenario(id: string) {
     setSelectedScenario(id)
     setScenarioImpact(null)
-    const response = await fetch(`/api/payments/scenarios/${id}/impact`)
+    const response = await fetch(`/api/payments/scenarios/${id}/impact?${periodQuery}`)
     if (response.ok) setScenarioImpact((await response.json()).impact)
   }
 
-  if (loading) return <div className="space-y-6"><PageHeader title="Planejar Pagamentos" /><Card><CardContent className="pt-6"><Skeleton className="h-96" /></CardContent></Card></div>
 
   return (
     <div className="space-y-6">
       <PageHeader title="Planejar Pagamentos" description="Escolha as obrigações e simule o efeito dos pagamentos no caixa." />
+      <CashFlowPeriodFilter from={from} to={to} today={today} onChange={changePeriod} />
+      {loading && <p role="status">Atualizando pagamentos...</p>}
       {error && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {message && <div role="status" className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>}
 
@@ -115,7 +145,7 @@ export default function PlanejarpagamentosPage() {
               <Button type="button" size="sm" onClick={saveSelection} disabled={saving || selectedCandidates.length === 0}>{saving ? 'Salvando...' : 'Salvar planejamento'}</Button>
             </div>
             <div className="space-y-2">
-              {candidates.map((candidate) => (
+              {candidates.slice((page - 1) * 50, page * 50).map((candidate) => (
                 <div key={candidate.apId} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[auto_1fr_auto_auto_auto] md:items-center">
                   <input type="checkbox" checked={selectedIds.has(candidate.apId)} onChange={() => toggle(candidate.apId)} aria-label={`Selecionar ${candidate.fornecedorNome || candidate.apId}`} />
                   <div className="min-w-0"><p className="truncate font-medium">{candidate.fornecedorNome || 'Fornecedor não informado'}</p><p className="truncate text-xs text-muted-foreground">{candidate.categoria || 'Sem categoria'} · vencimento {candidate.dataVencimento ? formatDateOnlyBR(candidate.dataVencimento) : 'sem data'}</p></div>
@@ -129,12 +159,16 @@ export default function PlanejarpagamentosPage() {
         </CardContent>
       </Card>
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm">Total em aberto no per?odo: {formatBRL(candidates.reduce((sum, c) => sum + c.saldo, 0))}</p>
+        <div className="flex items-center gap-2"><Button variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Anterior</Button><span>P?gina {page} de {Math.max(1, Math.ceil(candidates.length / 50))}</span><Button variant="outline" disabled={page * 50 >= candidates.length} onClick={() => setPage(p => p + 1)}>Pr?xima</Button></div>
+      </div>
       <div className="grid gap-4 md:grid-cols-5">
         <Metric label="Contas selecionadas" value={String(selectedCandidates.length)} />
         <Metric label="Total selecionado" value={formatBRL(totalSelected)} />
-        <Metric label="Saldo antes" value={impact ? formatBRL(impact.saldoAntes) : '—'} />
+        <Metric label="Saldo antes" value={impact?.saldoAntes != null ? formatBRL(impact.saldoAntes) : '—'} />
         <Metric label="Pagamentos" value={impact ? formatBRL(impact.pagamentos) : formatBRL(totalSelected)} />
-        <Metric label="Saldo depois" value={impact ? formatBRL(impact.saldoDepois) : '—'} tone={impact && impact.saldoDepois < 0 ? 'red' : 'green'} />
+        <Metric label="Saldo depois" value={impact?.saldoDepois != null ? formatBRL(impact.saldoDepois) : '—'} tone={impact?.saldoDepois != null && impact.saldoDepois < 0 ? 'red' : 'green'} />
       </div>
 
       <Card>

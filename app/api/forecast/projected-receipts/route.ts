@@ -22,32 +22,39 @@
  */
 
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getCurrentMember } from '@/lib/auth/session'
 import { NextRequest, NextResponse } from 'next/server'
 import { transformForecastToReceipts, validateForecastTransformInvariant } from '@/lib/forecast/transform'
 import type { MonthlyValue } from '@/lib/forecast/scenarios'
 
 export async function POST(req: NextRequest) {
+  const member = await getCurrentMember()
+  if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
-    const admin = createAdminSupabaseClient()
-
-    // For development: extract org_id from query param
-    let orgId: string | null = req.nextUrl.searchParams.get('org_id')
-
-    // If not in query, try to get from body
-    if (!orgId) {
-      const body = await req.json().catch(() => ({})) as { org_id?: string; version_id?: string }
-      orgId = body.org_id || null
+    let body: { org_id?: string; version_id?: string }
+    try {
+      const parsedBody: unknown = await req.json()
+      if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+      }
+      body = parsedBody as { org_id?: string; version_id?: string }
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (!orgId) {
-      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
+    const requestedOrgIds = [req.nextUrl.searchParams.get('org_id'), body.org_id].filter(Boolean)
+    if (requestedOrgIds.some((requestedOrgId) => requestedOrgId !== member.orgId)) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
     }
-    const body = await req.json()
-    const versionId = body.version_id as string
+    const orgId = member.orgId
+    const versionId = body.version_id
 
     if (!versionId) {
       return NextResponse.json({ error: 'version_id required' }, { status: 400 })
     }
+
+    const admin = createAdminSupabaseClient()
 
     // Verify version belongs to org
     const { data: version, error: versionError } = await admin

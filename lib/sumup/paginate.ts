@@ -22,7 +22,7 @@ export async function* paginateSumupTransactions<T>(
     const nextLink = page.links?.find((link) => link.rel === 'next')
     if (!nextLink) break
 
-    if (seenHrefs.has(nextLink.href)) break
+    if (seenHrefs.has(nextLink.href)) throw new Error('SumUp pagination cursor repeated')
     seenHrefs.add(nextLink.href)
 
     // SumUp's `next` link `href` is a bare query string (no path/scheme),
@@ -34,6 +34,6 @@ export async function* paginateSumupTransactions<T>(
     // NOT echo back the caller's filters. So merge it over `baseQuery` instead
     // of replacing it: filters like `changes_since` survive across every page,
     // while the href's own cursor params win on key collisions.
-    query = { ...baseQuery, ...Object.fromEntries(new URLSearchParams(nextLink.href)) }
+    query = { ...baseQuery, ...Object.fromEntries(new URLSearchParams(nextLink.href.includes('?') ? nextLink.href.split('?')[1] : nextLink.href)) }
   }
 }

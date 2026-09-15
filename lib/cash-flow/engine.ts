@@ -1,8 +1,8 @@
+import { calculateAnchoredDays } from './anchors'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages, LINKED_STATUSES } from '@/lib/reconciliation/run'
 import { classifyAccountsReceivable, classifyAccountsPayable, type CashBucket } from '@/lib/cash-flow/classify'
-import { aggregateByDay, type CashFlowDay } from '@/lib/cash-flow/aggregate'
-import { shiftDateString } from '@/lib/cash-flow/dates'
+import { type CashFlowDay } from '@/lib/cash-flow/aggregate'
 import { isVerifiedReconciliation } from '@/lib/reconciliation/verification'
 
 export type { CashBucket } from '@/lib/cash-flow/classify'
@@ -10,6 +10,7 @@ export type { CashBucket } from '@/lib/cash-flow/classify'
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
 export type CashFlowEntry = {
+  nature?: string
   id: string
   origin: 'ar' | 'ap' | 'manual' | 'forecast' | 'payment_plan' | 'ledger'
   sourceId: string
@@ -382,65 +383,25 @@ export async function resolveOpeningBalance(
   return { balance: baseBalance + adjustmentTotal + realizadoSinceSnapshot, asOf: referenceDate }
 }
 
-/**
- * Builds the day-by-day cash flow for `[from, to]`, correctly handling the
- * common case where the org's only (or most recent) balance snapshot falls
- * *inside* that window instead of before it.
- *
- * `resolveOpeningBalance(orgId, from, entries)` only ever finds a snapshot
- * strictly before `from` — that's the right contract for "what was the
- * balance entering this date" (see its own tests), but every page that
- * renders a curve calls it once, anchored at `from`. A user registering
- * *today's* balance on a 90-day-lookback page (`from` = today − 90) will
- * never satisfy `reference_date < from`, so `aggregateByDay` gets a null
- * opening for the entire range and the curve stays empty — even though a
- * real snapshot now exists, just later in the window than `from`. That's
- * the bug behind "registrar o saldo não gera a curva".
- *
- * This stitches two `aggregateByDay` passes together: an unpriced segment
- * before the snapshot (same "no confirmed balance yet" look the chart
- * already had) and a priced segment from the day after the snapshot's
- * `reference_date` onward — the first date `resolveOpeningBalance` can
- * legitimately price.
- */
-export async function buildCashFlowDays(
-  orgId: string,
-  from: string,
-  to: string,
-  entries: CashFlowEntry[]
-): Promise<CashFlowDay[]> {
-  const opening = await resolveOpeningBalance(orgId, from, entries)
-  if (opening) {
-    return aggregateByDay(entries, { from, to }, opening)
-  }
-
+/** All views use the same closing-balance anchors, including reconciliations inside the range. */
+export async function buildCashFlowDays(orgId: string, from: string, to: string, entries: CashFlowEntry[]): Promise<CashFlowDay[]> {
   const admin = createAdminSupabaseClient()
-  const { data: snapshot, error: snapshotError } = await admin
-    .from('cash_balance_snapshots')
-    .select('reference_date')
-    .eq('org_id', orgId)
-    .gte('reference_date', from)
-    .lte('reference_date', to)
-    .order('reference_date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (snapshotError) {
-    throw new Error(`Failed to load cash_balance_snapshots: ${snapshotError.message}`)
-  }
-  if (!snapshot) {
-    return aggregateByDay(entries, { from, to }, null)
-  }
-
-  const balanceStartDate = shiftDateString(snapshot.reference_date as string, 1)
-  if (balanceStartDate > to) {
-    // The snapshot's reference_date is the last visible day — there is no
-    // date left in range for which resolveOpeningBalance can price anything.
-    return aggregateByDay(entries, { from, to }, null)
-  }
-
-  const before = aggregateByDay(entries, { from, to: shiftDateString(balanceStartDate, -1) }, null)
-  const openingAtStart = await resolveOpeningBalance(orgId, balanceStartDate, entries)
-  const after = aggregateByDay(entries, { from: balanceStartDate, to }, openingAtStart)
-
-  return [...before, ...after]
+  const dayOnly = (value: string) => String(value).slice(0, 10)
+  const [snapshots, adjustments] = await Promise.all([
+    fetchAllPages<{ reference_date: string; bank_balance: number; cash_on_hand: number | null; liquid_investments: number | null; created_at: string }>(
+      (a, b) => admin.from('cash_balance_snapshots').select('reference_date, bank_balance, cash_on_hand, liquid_investments, created_at').eq('org_id', orgId).lte('reference_date', to).order('reference_date').order('created_at').range(a, b), 'Failed to load balance anchors'),
+    fetchAllPages<{ entry_date: string; amount: number }>(
+      (a, b) => admin.from('manual_cash_entries').select('entry_date, amount').eq('org_id', orgId).eq('type', 'ajuste_saldo').is('deleted_at', null).lte('entry_date', to).order('entry_date').order('id').range(a, b), 'Failed to load balance adjustments'),
+  ])
+  return calculateAnchoredDays(
+    entries,
+    from,
+    to,
+    snapshots.map(s => ({
+      date: dayOnly(s.reference_date),
+      balance: Number(s.bank_balance) + Number(s.cash_on_hand ?? 0) + Number(s.liquid_investments ?? 0),
+      createdAt: s.created_at,
+    })),
+    adjustments.map(a => ({ date: dayOnly(a.entry_date), amount: Number(a.amount) })),
+  )
 }

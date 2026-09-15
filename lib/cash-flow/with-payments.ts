@@ -1,5 +1,6 @@
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { loadCashFlowEntries, resolveOpeningBalance, type CashFlowEntry } from '@/lib/cash-flow/engine'
+import { type CashFlowEntry } from '@/lib/cash-flow/engine'
 import { loadPlannedPayments, loadPaymentScenarios } from '@/lib/payments/engine'
 import { mergePlannedPaymentsIntoFlow } from '@/lib/payments/scenarios'
 import type { PlannedPaymentValue, PaymentAdjustment } from '@/lib/payments/scenarios'
@@ -13,7 +14,7 @@ export async function loadCashFlowWithPlannedPayments(
   scenarioId?: string,
   includePlanned: boolean = true
 ): Promise<CashFlowEntry[]> {
-  const actualEntries = await loadCashFlowEntries(orgId)
+  const actualEntries = await loadCanonicalCashFlow(orgId)
 
   if (!includePlanned) return actualEntries
 
@@ -26,15 +27,15 @@ export async function loadCashFlowWithPlannedPayments(
   const apIds = plannedPayments.map((p) => p.apId)
   const { data: apDetails } = await admin
     .from('olist_accounts_payable')
-    .select('id, valor, data_vencimento')
+    .select('id, saldo, data_vencimento').eq('org_id', orgId).gt('saldo', 0)
     .in('id', apIds)
 
   const apDetailsMap = new Map(
-    (apDetails || []).map((ap) => [ap.id, { value: ap.valor || 0, dataVencimento: ap.data_vencimento || '' }])
+    (apDetails || []).map((ap) => [ap.id, { value: ap.saldo || 0, dataVencimento: ap.data_vencimento || '' }])
   )
 
   // Convert planned payments to adjusted payments
-  const paymentValues: PlannedPaymentValue[] = plannedPayments.map((pp) => {
+  const paymentValues: PlannedPaymentValue[] = plannedPayments.filter(pp => apDetailsMap.has(pp.apId)).map((pp) => {
     const details = apDetailsMap.get(pp.apId) || { value: 0, dataVencimento: '' }
     return {
       apId: pp.apId,

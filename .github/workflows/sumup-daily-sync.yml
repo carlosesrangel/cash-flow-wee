@@ -1,241 +1,55 @@
-name: Sincronização SumUp Diária
+name: Sincroniza??o SumUp Di?ria
 
 on:
   schedule:
-    # Executa diariamente às 03:00 AM (UTC) = 00:00 BRT (midnight)
-    # 1 hora após a sincronização do Olist (02:00 UTC)
-    - cron: '0 3 * * *'
-
+    - cron: '47 1-23/4 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Modo de sincronização'
-        required: false
-        default: 'incremental'
+        description: Modo de sincroniza??o
         type: choice
-        options:
-          - incremental
-          - initial
+        default: incremental
+        options: [incremental, initial]
+
+permissions:
+  contents: read
+concurrency:
+  group: production-financial-writes
+  cancel-in-progress: false
 
 jobs:
-  sync-sumup:
-    name: Sincronizar dados SumUp
+  sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    # SumUp é mais rápido que Olist — transações + payouts, sem chamadas de detalhe
-
+    timeout-minutes: 150
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Sincronizar dados SumUp (todas as organizações conectadas)
+          cache: npm
+      - run: npm ci
+      - name: Sincronizar e atualizar dados financeiros
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUMUP_API_KEY: ${{ secrets.SUMUP_API_KEY }}
-        run: |
-          MODE="${{ github.event.inputs.mode }}"
-          if [ -z "$MODE" ]; then
-            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-sumup-sync.ts --skip-derived-refresh
-          else
-            npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-sumup-sync.ts --mode "$MODE" --skip-derived-refresh
-          fi
-
-      - name: Verificar status de sync
+          SUMUP_MERCHANT_CODE: ${{ secrets.SUMUP_MERCHANT_CODE }}
+          SUMUP_ORG_ID: ${{ secrets.SUMUP_ORG_ID }}
+          SYNC_MODE: ${{ inputs.mode || 'incremental' }}
+        run: npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-sumup-sync.ts --mode "$SYNC_MODE" --skip-derived-refresh
+      - name: Atualizar analytics e ledger derivados
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx cross-env NODE_OPTIONS=--conditions=react-server tsx scripts/run-financial-refresh.ts
+      - name: Resultado
         if: always()
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESULT: ${{ job.status }}
         run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-
-          (async () => {
-            const { data, error } = await supabase
-              .from('sync_runs')
-              .select('org_id, status, started_at, finished_at, error_message')
-              .eq('integration', 'sumup')
-              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString())
-              .order('started_at', { ascending: false });
-
-            if (error) {
-              console.error('Erro ao buscar status:', error);
-              return;
-            }
-
-            if (!data || data.length === 0) {
-              console.log('ℹ️ Nenhuma sincronização SumUp encontrada nas últimas 2 horas');
-              return;
-            }
-
-            console.log('📊 Status dos últimos syncs SumUp:');
-            data.forEach(sync => {
-              const icon = sync.status === 'success' ? '✅' :
-                          sync.status === 'running' ? '⏳' : '❌';
-              console.log(\`  \${icon} Org: \${sync.org_id.substring(0,8)}... Status: \${sync.status}\`);
-              if (sync.error_message) {
-                console.log(\`     Erro: \${sync.error_message}\`);
-              }
-            });
-          })();
-          "
-
-      - name: Notificar sucesso (Slack - opcional)
-        if: success()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "ℹ️ Slack webhook não configurado, pulando notificação"
-            exit 0
+          echo "## sumup: $RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "M?tricas e checkpoint por organiza??o: etapa de sincroniza??o e tabela sync_runs." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Sincroniza??o sumup falhou. Consulte os logs e sync_runs."
+            exit 1
           fi
-
-          curl -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            -d '{
-              "text": "✅ Sincronização SumUp concluída com sucesso",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*✅ Sincronização SumUp Diária*\n*Status:* Concluído com sucesso\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)"
-                  }
-                }
-              ]
-            }'
-
-      - name: Coletar detalhes de erro
-        if: failure()
-        id: error-details
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-
-          (async () => {
-            const { data: failures } = await supabase
-              .from('sync_runs')
-              .select('org_id, error_message, started_at')
-              .eq('integration', 'sumup')
-              .eq('status', 'failed')
-              .gte('started_at', new Date(Date.now() - 60*60*1000).toISOString())
-              .order('started_at', { ascending: false });
-
-            const summary = failures && failures.length > 0
-              ? failures.map(f => \`• \${f.org_id.substring(0,8)}...: \${f.error_message || 'Erro desconhecido'}\`).join('\\n')
-              : 'Sem detalhes de erro registrados';
-
-            console.log('ERROR_DETAILS<<EOF');
-            console.log(summary);
-            console.log('EOF');
-          })();
-          " >> $GITHUB_OUTPUT
-
-      - name: Notificar falha (Slack - opcional)
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "ℹ️ Slack webhook não configurado"
-            exit 0
-          fi
-
-          ERROR_DETAILS="${{ steps.error-details.outputs.ERROR_DETAILS }}"
-
-          curl -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            -d '{
-              "text": "❌ Sincronização SumUp falhou",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*❌ Sincronização SumUp Diária Falhou*\n*Horário:* '"$(date '+%d/%m/%Y %H:%M:%S')"' (BRT)\n*Detalhes:*\n'"$ERROR_DETAILS"'\n\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver logs completos> | <https://cash-flow-wee.vercel.app/sincronizacoes|Dashboard>"
-                  }
-                }
-              ]
-            }'
-
-  # Job adicional: Health check para sincronizações SumUp
-  health-check:
-    name: Verificar saúde de sincronizações SumUp
-    runs-on: ubuntu-latest
-    needs: sync-sumup
-    if: always()
-
-    steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Verificar últimos syncs SumUp
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-
-          (async () => {
-            const { data: successes } = await supabase
-              .from('sync_runs')
-              .select('id')
-              .eq('integration', 'sumup')
-              .eq('status', 'success')
-              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString());
-
-            const { data: failures } = await supabase
-              .from('sync_runs')
-              .select('id')
-              .eq('integration', 'sumup')
-              .eq('status', 'failed')
-              .gte('started_at', new Date(Date.now() - 2*60*60*1000).toISOString());
-
-            const successCount = (successes || []).length;
-            const failureCount = (failures || []).length;
-
-            console.log(\`📊 Sincronizações SumUp nas últimas 2 horas:\`);
-            console.log(\`   ✅ Sucesso: \${successCount}\`);
-            console.log(\`   ❌ Falhas: \${failureCount}\`);
-
-            if (successCount === 0 && failureCount === 0) {
-              console.log(\`⚠️  Nenhuma sincronização rodou (pode indicar problema)\`);
-            }
-          })();
-          "

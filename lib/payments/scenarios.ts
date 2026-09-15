@@ -95,5 +95,6 @@ export function mergePlannedPaymentsIntoFlow(
     description: `Pagamento Planejado - ${p.date}`,
   }))
 
-  return [...actualEntries, ...paymentEntries]
+  const replaced = new Set(futurePayments.map(p => p.apId))
+  return [...actualEntries.filter(e => !(e.origin === 'ap' && e.bucket !== 'realizado' && replaced.has(e.sourceId))), ...paymentEntries]
 }

@@ -1,3 +1,5 @@
+import { withIntegrationLock } from '@/lib/integrations/lock'
+import { OAuthTokenError } from '@/lib/olist/oauth'
 import 'server-only'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { refreshTokens } from '@/lib/olist/oauth'
@@ -57,30 +59,34 @@ export function getValidConnection(orgId: string): Promise<{ accessToken: string
   return promise
 }
 
-async function fetchValidConnection(orgId: string): Promise<{ accessToken: string } | null> {
+async function fetchValidConnection(orgId: string, rejectedAccessToken?: string, locked = false): Promise<{ accessToken: string } | null> {
   const admin = createAdminSupabaseClient()
-  const { data: connection } = await admin
+  const { data: connection, error: connectionError } = await admin
     .from('integration_connections')
     .select('access_token, refresh_token, expires_at, status')
     .eq('org_id', orgId)
     .eq('provider', 'olist')
     .single()
 
+  if (connectionError) throw new Error('Failed to read Olist connection')
   if (!connection || !connection.access_token || !connection.refresh_token) {
     return null
   }
 
   const expiresAt = connection.expires_at ? new Date(connection.expires_at as string).getTime() : 0
-  const needsRefresh = expiresAt - Date.now() < EXPIRY_BUFFER_MS
+  const needsRefresh = !Number.isFinite(expiresAt) || expiresAt - Date.now() < EXPIRY_BUFFER_MS || connection.access_token === rejectedAccessToken
 
   if (!needsRefresh) {
     return { accessToken: connection.access_token as string }
   }
 
+  if (!locked) return withIntegrationLock(orgId, 'olist-oauth', 60, () => fetchValidConnection(orgId, rejectedAccessToken, true))
+
   let tokens
   try {
     tokens = await refreshTokens(connection.refresh_token as string)
-  } catch {
+  } catch (cause) {
+    if (!(cause instanceof OAuthTokenError) || cause.oauthCode !== 'invalid_grant') throw cause
     const { error } = await admin
       .from('integration_connections')
       .update({ status: 'precisa_reautorizar', updated_at: new Date().toISOString() })
@@ -133,7 +139,7 @@ export async function olistFetch<T>(
   path: string,
   query: Record<string, string | number | undefined> = {}
 ): Promise<T> {
-  const connection = await getValidConnection(orgId)
+  let connection = await getValidConnection(orgId)
   if (!connection) {
     throw new Error(`Olist connection unavailable for org ${orgId} — reauthorization required`)
   }
@@ -153,10 +159,13 @@ export async function olistFetch<T>(
     try {
       response = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${connection.accessToken}` },
+        signal: AbortSignal.timeout(15_000),
       })
     } catch (error) {
       recordExternalFailure({ provider: 'olist', endpoint: url.toString(), startedAt, error })
-      throw error
+      if (attempt === MAX_RETRIES - 1) throw new Error(`Olist network request failed for ${path}`)
+      await sleep(2 ** attempt * 500)
+      continue
     }
 
     if (response.ok) {
@@ -169,13 +178,10 @@ export async function olistFetch<T>(
     lastError = new Error(`Olist API request failed (${response.status}) for ${path}: ${safe.message ?? 'upstream error'}`)
 
     if (response.status === 401) {
-      const admin = createAdminSupabaseClient()
-      await admin
-        .from('integration_connections')
-        .update({ status: 'precisa_reautorizar', updated_at: new Date().toISOString() })
-        .eq('org_id', orgId)
-        .eq('provider', 'olist')
-      throw lastError
+      if (attempt > 0) throw lastError
+      connection = await fetchValidConnection(orgId, connection.accessToken)
+      if (!connection) throw new Error('Olist reauthorization required')
+      continue
     }
 
     if (!RETRY_STATUS_CODES.has(response.status) || attempt === MAX_RETRIES - 1) {

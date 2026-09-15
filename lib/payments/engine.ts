@@ -1,3 +1,4 @@
+import type { PaymentPeriod } from './period'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/reconciliation/run'
 import { applyScenarioToPayment } from '@/lib/payments/scenarios'
@@ -75,16 +76,18 @@ export async function loadPlannedPayments(orgId: string): Promise<PlannedPayment
 }
 
 /** Load only outstanding payables that can be selected for payment planning. */
-export async function loadPayableCandidates(orgId: string): Promise<PayableCandidate[]> {
+export async function loadPayableCandidates(orgId: string, period: PaymentPeriod = {}): Promise<PayableCandidate[]> {
   const admin = createAdminSupabaseClient()
-  const [{ data: rows, error }, { data: contacts, error: contactsError }, { data: planned, error: plannedError }] = await Promise.all([
-    admin.from('olist_accounts_payable').select('id, fornecedor_olist_id, categoria, data_vencimento, saldo, valor, situacao, data_liquidacao').eq('org_id', orgId).order('data_vencimento', { ascending: true }),
-    admin.from('olist_contacts').select('olist_id, nome').eq('org_id', orgId),
-    admin.from('planned_payments').select('ap_id, planned_date').eq('org_id', orgId),
+  const [rows, contacts, planned] = await Promise.all([
+    fetchAllPages<any>((from, to) => {
+      let query = admin.from('olist_accounts_payable').select('id, fornecedor_olist_id, categoria, data_vencimento, saldo, valor, situacao, data_liquidacao').eq('org_id', orgId).gt('saldo', 0).order('data_vencimento').order('id')
+      if (period.from) query = query.gte('data_vencimento', period.from)
+      if (period.to) query = query.lte('data_vencimento', period.to)
+      return query.range(from, to)
+    }, 'Failed to load payable candidates'),
+    fetchAllPages<any>((from, to) => admin.from('olist_contacts').select('olist_id, nome').eq('org_id', orgId).order('id').range(from, to), 'Failed to load suppliers'),
+    fetchAllPages<any>((from, to) => admin.from('planned_payments').select('ap_id, planned_date').eq('org_id', orgId).order('ap_id').range(from, to), 'Failed to load planned dates'),
   ])
-  if (error) throw new Error(`Failed to load payable candidates: ${error.message}`)
-  if (contactsError) throw new Error(`Failed to load payable suppliers: ${contactsError.message}`)
-  if (plannedError) throw new Error(`Failed to load planned dates: ${plannedError.message}`)
 
   const contactNames = new Map((contacts ?? []).map((contact) => [contact.olist_id as number, contact.nome as string | null]))
   const plannedDates = new Map((planned ?? []).map((payment) => [payment.ap_id as string, payment.planned_date as string]))

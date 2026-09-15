@@ -1,10 +1,9 @@
 export const INTEGRATION_HEALTH_THRESHOLDS = {
-  // The scheduled jobs run daily. A 12-hour grace period avoids false alarms
-  // around the 02:00/03:00 UTC window while still surfacing a missed run.
-  expectedSyncFrequencyHours: 24,
-  warningAfterHours: 36,
-  staleAfterHours: 72,
-  criticalAfterHours: 168,
+  // Six daily runs; warn after one missed cycle, critical before refresh expiry.
+  expectedSyncFrequencyHours: 4,
+  warningAfterHours: 8,
+  staleAfterHours: 12,
+  criticalAfterHours: 20,
 } as const
 
 export type FreshnessLevel = 'FRESH' | 'WARNING' | 'STALE' | 'CRITICAL'

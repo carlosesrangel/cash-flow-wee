@@ -14,7 +14,7 @@
  *   npx tsx scripts/run-sumup-sync.ts --mode initial   # força sync completo (histórico)
  *
  * Requer as mesmas variáveis de .env.local: NEXT_PUBLIC_SUPABASE_URL,
- * SUPABASE_SERVICE_ROLE_KEY, SUMUP_API_KEY, SUMUP_MERCHANT_CODE.
+ * SUPABASE_SERVICE_ROLE_KEY, SUMUP_API_KEY, SUMUP_MERCHANT_CODE, SUMUP_ORG_ID.
  *
  * IMPORTANTE: precisa rodar com a flag `--conditions=react-server` (já
  * embutida no script `npm run sync:sumup`) — os módulos importados abaixo
@@ -24,8 +24,6 @@
 import 'dotenv/config'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { runSumupSync } from '@/lib/sumup/sync'
-
-const ACTIVE_SYNC_STALENESS_MS = 10 * 60 * 1000
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -40,47 +38,21 @@ function parseArgs() {
 
 async function main() {
   const { orgId, forcedMode, skipDerivedRefresh } = parseArgs()
+  if (forcedMode && !['initial', 'incremental'].includes(forcedMode)) throw new Error('Invalid sync mode')
+  const required = ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUMUP_API_KEY', 'SUMUP_MERCHANT_CODE', 'SUMUP_ORG_ID']
+  for (const key of required) if (!process.env[key]) throw new Error(`Missing required secret: ${key}`)
   const admin = createAdminSupabaseClient()
 
-  let connections: Array<{ org_id: string }>
-  if (orgId) {
-    connections = [{ org_id: orgId }]
-  } else {
-    const { data, error } = await admin
-      .from('integration_connections')
-      .select('org_id')
-      .eq('provider', 'sumup')
-      .eq('status', 'conectado')
-    if (error) throw new Error(`Erro ao buscar conexões: ${error.message}`)
-    connections = data ?? []
-  }
-
-  if (connections.length === 0) {
-    console.log('ℹ️  Nenhuma organização com SumUp conectada.')
-    return
-  }
+  const targetOrg = orgId ?? process.env.SUMUP_ORG_ID!
+  if (orgId && orgId !== process.env.SUMUP_ORG_ID) throw new Error('SumUp API key belongs to a different configured organization')
+  const connections = [{ org_id: targetOrg }]
+  if (connections.length === 0) throw new Error('No configured integration: synchronization did not run')
 
   console.log(`📊 ${connections.length} organização(ões) para sincronizar\n`)
 
   let failed = 0
 
   for (const conn of connections) {
-    const cutoff = new Date(Date.now() - ACTIVE_SYNC_STALENESS_MS).toISOString()
-    const { data: activeSync } = await admin
-      .from('sync_runs')
-      .select('id')
-      .eq('org_id', conn.org_id)
-      .eq('integration', 'sumup')
-      .eq('status', 'running')
-      .gte('started_at', cutoff)
-      .limit(1)
-      .maybeSingle()
-
-    if (activeSync) {
-      console.log(`⏳ Sync já em andamento para ${conn.org_id}, pulando`)
-      continue
-    }
-
     const { data: priorSuccess } = await admin
       .from('sync_runs')
       .select('id')

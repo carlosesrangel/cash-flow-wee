@@ -660,27 +660,10 @@ export async function syncLedgerFromAllSources(orgId: string) {
  * Calculate running balance from ledger
  */
 export async function calculateLedgerBalance(admin: SupabaseClient, orgId: string, upToDate?: string) {
-  const query = admin
-    .from('financial_ledger')
-    .select('amount, direction')
-    .eq('org_id', orgId)
-    .in('status', ['actual', 'scheduled']) // Exclude pure projections
-
-  if (upToDate) {
-    query.lte('event_date', upToDate)
-  }
-
-  const { data: entries, error } = await query
-
-  if (error) {
-    throw error
-  }
-
-  let balance = 0
-  for (const entry of entries || []) {
-    const amount = entry.direction === 'entrada' ? entry.amount : -entry.amount
-    balance += amount
-  }
-
-  return balance
+  const { loadCanonicalCashFlow } = await import('./canonical-cash-flow')
+  const { buildCashFlowDays } = await import('@/lib/cash-flow/engine')
+  const { toLocalDateParam } = await import('@/lib/integrations/date')
+  const date = upToDate ?? toLocalDateParam(new Date())
+  const entries = await loadCanonicalCashFlow(orgId)
+  return (await buildCashFlowDays(orgId, date, date, entries))[0]?.saldoFinal ?? null
 }

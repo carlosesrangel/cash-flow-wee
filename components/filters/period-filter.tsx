@@ -51,7 +51,7 @@ export function PeriodFilter({ onPeriodChange }: PeriodFilterProps) {
     const fromStr = from.toISOString().split('T')[0]
     const toStr = to.toISOString().split('T')[0]
 
-    const params = new URLSearchParams()
+    const params = new URLSearchParams(searchParams)
     params.set('from', fromStr)
     params.set('to', toStr)
 

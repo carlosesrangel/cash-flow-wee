@@ -4,10 +4,10 @@ import { classifyFreshness, deriveIntegrationHealth, evaluateHealthChecks, sanit
 const now = new Date('2026-09-02T12:00:00.000Z')
 
 describe('integration health and freshness', () => {
-  it('uses centralized daily-job thresholds', () => {
-    expect(classifyFreshness('2026-09-02T00:00:00.000Z', now)).toBe('FRESH')
-    expect(classifyFreshness('2026-08-31T00:00:00.000Z', now)).toBe('WARNING')
-    expect(classifyFreshness('2026-08-29T00:00:00.000Z', now)).toBe('STALE')
+  it('uses centralized four-hour-job thresholds', () => {
+    expect(classifyFreshness('2026-09-02T08:00:00.000Z', now)).toBe('FRESH')
+    expect(classifyFreshness('2026-09-02T03:00:00.000Z', now)).toBe('WARNING')
+    expect(classifyFreshness('2026-09-01T23:00:00.000Z', now)).toBe('STALE')
     expect(classifyFreshness('2026-08-24T00:00:00.000Z', now)).toBe('CRITICAL')
   })
 

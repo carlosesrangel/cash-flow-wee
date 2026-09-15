@@ -1,6 +1,8 @@
+import { paymentPeriodSchema } from '@/lib/payments/period'
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentMember } from '@/lib/auth/session'
-import { loadCashFlowEntries, buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { buildCashFlowDays } from '@/lib/cash-flow/engine'
 import { shiftDateString } from '@/lib/cash-flow/dates'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { toLocalDateParam } from '@/lib/integrations/date'
@@ -13,6 +15,8 @@ export async function GET(
   const member = await getCurrentMember()
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const period = paymentPeriodSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams))
+  if (!period.success) return NextResponse.json({ error: period.error.issues[0].message }, { status: 400 })
   try {
     const admin = createAdminSupabaseClient()
 
@@ -37,14 +41,14 @@ export async function GET(
 
     // Load baseline cash flow (no adjustments)
     const today = toLocalDateParam(new Date())
-    const from = shiftDateString(today, -30)
-    const to = shiftDateString(today, 90)
+    const from = period.data.from || shiftDateString(today, -30)
+    const to = period.data.to || shiftDateString(today, 90)
 
-    const baselineEntries = await loadCashFlowEntries(member.orgId)
+    const baselineEntries = await loadCanonicalCashFlow(member.orgId)
     const baselineDays = await buildCashFlowDays(member.orgId, from, to, baselineEntries)
 
     // Calculate baseline metrics
-    const baselineMetrics = calculateMetrics(baselineDays, today)
+    const baselineMetrics = calculateMetrics(baselineDays, from)
 
     // Apply scenario adjustments to entries
     const adjustmentMap = new Map<string, { daysDelta: number; percentage: number }>()
@@ -53,7 +57,7 @@ export async function GET(
     }
 
     const adjustedEntries = baselineEntries.map((entry) => {
-      if (entry.origin !== 'ap') return entry
+      if (entry.origin !== 'ap' || entry.bucket === 'realizado') return entry
 
       const adjustment = adjustmentMap.get(entry.sourceId)
       if (!adjustment) return entry
@@ -76,7 +80,7 @@ export async function GET(
     const adjustedDays = await buildCashFlowDays(member.orgId, from, to, adjustedEntries)
 
     // Calculate adjusted metrics
-    const adjustedMetrics = calculateMetrics(adjustedDays, today)
+    const adjustedMetrics = calculateMetrics(adjustedDays, from)
 
     // Determine if this is an improvement
     const melhoria =

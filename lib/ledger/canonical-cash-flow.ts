@@ -24,6 +24,7 @@ type LedgerRow = {
  */
 export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntry[]> {
   const admin = createAdminSupabaseClient()
+  const dateOnly = (value: string) => String(value).slice(0, 10)
   const rows = await fetchAllPages<LedgerRow>(
     (from, to) =>
       admin
@@ -32,12 +33,16 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
         .eq('org_id', orgId)
         .in('status', ['actual', 'scheduled', 'projected'])
         .is('superseded_at', null)
+        .order('event_date')
+        .order('id')
         .range(from, to),
     'Failed to load canonical financial_ledger read model'
   )
 
-  return rows.map((row) => ({
+  const manual = await fetchAllPages<{ id: string; entry_date: string; amount: number; type: 'entrada' | 'saida'; description: string | null }>((a, b) => admin.from('manual_cash_entries').select('id, entry_date, amount, type, description').eq('org_id', orgId).is('deleted_at', null).in('type', ['entrada', 'saida']).order('id').range(a, b), 'Failed to load live manual entries')
+  const mapped: CashFlowEntry[] = rows.filter(row => row.source !== 'manual').map((row) => ({
     id: `ledger-${row.id}`,
+    nature: row.nature,
     origin: row.nature.startsWith('OLIST_AR')
       ? 'ar'
       : row.nature.startsWith('OLIST_AP')
@@ -48,7 +53,7 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
             ? 'forecast'
             : 'ledger',
     sourceId: row.source_id || row.id,
-    date: row.event_date,
+    date: dateOnly(row.event_date),
     amount: Number(row.amount) || 0,
     direction: row.direction,
     bucket: row.status === 'actual' ? 'realizado' : row.status === 'scheduled' ? 'contratado' : 'projetado',
@@ -61,4 +66,5 @@ export async function loadCanonicalCashFlow(orgId: string): Promise<CashFlowEntr
     category: typeof row.metadata?.categoria === 'string' ? row.metadata.categoria : null,
     document: typeof row.metadata?.documento === 'string' ? row.metadata.documento : null,
   }))
+  return [...mapped, ...manual.map(row => ({ id: `manual-${row.id}`, nature: 'MANUAL_ENTRY', origin: 'manual' as const, sourceId: row.id, date: dateOnly(row.entry_date), amount: Number(row.amount), direction: row.type, bucket: 'realizado' as const, description: row.description }))]
 }

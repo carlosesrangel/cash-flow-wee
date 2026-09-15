@@ -1,4 +1,4 @@
-export type CashFlowDatePreset = 'ontem' | 'hoje' | 'este-mes' | 'mes-anterior' | 'este-ano' | 'ano-anterior' | 'proximo-mes' | 'proximos-30' | 'ultimos-30'
+export type CashFlowDatePreset = 'esta-semana' | 'ontem' | 'hoje' | 'este-mes' | 'mes-anterior' | 'este-ano' | 'ano-anterior' | 'proximo-mes' | 'proximos-30' | 'ultimos-30'
 
 function iso(date: Date) { return date.toISOString().slice(0, 10) }
 function at(today: string) { return new Date(`${today}T00:00:00Z`) }
@@ -9,6 +9,7 @@ export function getCashFlowDateRange(preset: CashFlowDatePreset, today: string):
   const date = at(today)
   switch (preset) {
     case 'ontem': { const d = new Date(date); d.setUTCDate(d.getUTCDate() - 1); return [iso(d), iso(d)] }
+    case 'esta-semana': { const start = new Date(date); start.setUTCDate(start.getUTCDate() - (start.getUTCDay() + 6) % 7); const end = new Date(start); end.setUTCDate(end.getUTCDate() + 6); return [iso(start), iso(end)] }
     case 'hoje': return [today, today]
     case 'este-mes': return [iso(firstOfMonth(date)), iso(lastOfMonth(date))]
     case 'mes-anterior': { const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1)); return [iso(d), iso(lastOfMonth(d))] }

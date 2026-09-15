@@ -23,34 +23,16 @@ export default async function FluxoDeCaixaAnualPage({
 
   const { ano, forecast, payments } = await searchParams
   const showForecast = forecast !== 'false'
-  const showPayments = payments !== 'false'
+  const showPayments = payments === 'true'
   const currentYear = Number(toLocalDateParam(new Date()).slice(0, 4))
   const year = ano && /^\d{4}$/.test(ano) ? Number(ano) : currentYear
   const from = `${year}-01-01`
   const to = `${year}-12-31`
 
-  const actualEntries = (await loadCanonicalCashFlow(member.orgId)).filter((entry) => entry.description !== 'Entrada projetada')
-  const supabase = await createServerSupabaseClient()
-
-  let entries = actualEntries
-  if (showForecast) {
-    const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
-    const now = new Date()
-    const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-    const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
-    entries = mergeCashFlowWithForecast(actualEntries, forecastEntries, today)
-  }
-
-  if (showPayments) {
-    entries = await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
-    if (showForecast) {
-      const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
-      const now = new Date()
-      const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
-      entries = mergeCashFlowWithForecast(entries, forecastEntries, today)
-    }
-  }
+  const canonicalEntries = showPayments
+    ? await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
+    : await loadCanonicalCashFlow(member.orgId)
+  const entries = showForecast ? canonicalEntries : canonicalEntries.filter(entry => entry.bucket !== 'projetado')
 
   const days = await buildCashFlowDays(member.orgId, from, to, entries)
   const months = aggregateByMonth(days)
@@ -67,7 +49,7 @@ export default async function FluxoDeCaixaAnualPage({
             Ano
           </label>
           <input id="ano" name="ano" type="number" defaultValue={year} className="w-24 rounded border px-2 py-1 text-sm" />
-          <button type="submit" className="rounded border px-3 py-1 text-sm font-medium">
+          <input type="hidden" name="forecast" value={String(showForecast)} /><input type="hidden" name="payments" value={String(showPayments)} /><button type="submit" className="rounded border px-3 py-1 text-sm font-medium">
             Ver
           </button>
         </form>

@@ -6,6 +6,13 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
+    // Route tests mock server modules at file scope. Running files in parallel
+    // lets those module graphs interfere with one another under Vitest 4.
+    // Keep the default suite deterministic until the mocks are isolated.
+    fileParallelism: false,
+    // Cold dynamic imports can exceed Vitest's 5s default after the full
+    // serial suite has warmed the jsdom worker.
+    testTimeout: 15_000,
     include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
     // RLS tests hit a real local Supabase instance and run separately via `npm run test:rls`
     // (see vitest.config.rls.ts) — exclude them here so `npm run test` stays hermetic.

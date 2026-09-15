@@ -9,22 +9,25 @@
  * Returns: sync status and entry counts
  */
 
-import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getCurrentMember } from '@/lib/auth/session'
+import { canManageIntegrations } from '@/lib/auth/rbac'
 import { NextRequest, NextResponse } from 'next/server'
 import { syncLedgerFromAllSources } from '@/lib/ledger/populate'
 
 export async function POST(req: NextRequest) {
+  const member = await getCurrentMember()
+  if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!canManageIntegrations(member.role)) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+  }
+
+  const requestedOrgId = req.nextUrl.searchParams.get('org_id')
+  if (requestedOrgId && requestedOrgId !== member.orgId) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+  }
+
   try {
-    const admin = createAdminSupabaseClient()
-
-    // For now, extract org_id from query param for development
-    // In production, this should authenticate via JWT token from header
-    const orgId = req.nextUrl.searchParams.get('org_id')
-    if (!orgId) {
-      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
-    }
-
-    const body = (await req.json().catch(() => ({}))) as { force_refresh?: boolean }
+    const orgId = member.orgId
 
     // Perform ledger sync
     const result = await syncLedgerFromAllSources(orgId)

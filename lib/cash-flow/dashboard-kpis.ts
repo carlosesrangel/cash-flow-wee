@@ -12,17 +12,19 @@ export type DashboardKpis = {
   saidasContratadasProjetadas: number
 }
 
-/** Computes the Overview KPIs from the canonical day series only. */
+/** Cards consume canonical closing balances, including any reconciliation within the horizon. */
 export function calculateDashboardKpis(days: CashFlowDay[], today: string, saldoAtual: number | null): DashboardKpis {
-  const next30 = days.filter((day) => day.date >= today && day.date <= shiftDateString(today, 30))
+  const next30 = days.filter((day) => day.date > today && day.date <= shiftDateString(today, 30))
   const sum = (rows: CashFlowDay[], side: 'entradas' | 'saidas', bucket: 'realizado' | 'contratado' | 'projetado') =>
     rows.reduce((total, day) => total + day[side][bucket], 0)
+  const entradas30 = sum(next30, 'entradas', 'realizado') + sum(next30, 'entradas', 'contratado') + sum(next30, 'entradas', 'projetado')
+  const saidas30 = sum(next30, 'saidas', 'realizado') + sum(next30, 'saidas', 'contratado') + sum(next30, 'saidas', 'projetado')
 
   return {
     saldoAtual,
-    entradas30: sum(next30, 'entradas', 'realizado') + sum(next30, 'entradas', 'contratado'),
-    saidas30: sum(next30, 'saidas', 'realizado') + sum(next30, 'saidas', 'contratado'),
-    saldoEm30: next30.length > 0 ? next30[next30.length - 1].saldoFinal : null,
+    entradas30,
+    saidas30,
+    saldoEm30: next30.at(-1)?.saldoFinal ?? null,
     entradasRealizadas: sum(days, 'entradas', 'realizado'),
     entradasContratadasProjetadas: sum(days, 'entradas', 'contratado') + sum(days, 'entradas', 'projetado'),
     saidasRealizadas: sum(days, 'saidas', 'realizado'),

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { withIntegrationLock } from '@/lib/integrations/lock'
 import 'dotenv/config'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { refreshDerivedFinancialData } from '@/lib/sync/derived-refresh'
@@ -36,7 +37,7 @@ async function main() {
       }
     }
     console.log(`Refreshing derived financial data for ${orgId}`)
-    const result = await refreshDerivedFinancialData(orgId)
+    const result = await withIntegrationLock(orgId, 'financial-sync', 10800, () => refreshDerivedFinancialData(orgId))
     const analyticsFinishedAt = result.analytics.reduce<Date | null>((latest, item) => !latest || item.finished_at > latest ? item.finished_at : latest, null)
     const ledgerFinishedAt = new Date()
     await admin.from('financial_refresh_runs').insert({

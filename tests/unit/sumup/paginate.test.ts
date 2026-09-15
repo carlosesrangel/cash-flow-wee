@@ -121,10 +121,9 @@ describe('paginateSumupTransactions', () => {
 
     const { paginateSumupTransactions } = await import('@/lib/sumup/paginate')
     const pages: unknown[] = []
-    for await (const page of paginateSumupTransactions('MC-TEST', {}, 1)) {
-      pages.push(page)
-      if (pages.length > 10) throw new Error('generator did not terminate on repeated href')
-    }
+    await expect((async () => {
+      for await (const page of paginateSumupTransactions('MC-TEST', {}, 1)) pages.push(page)
+    })()).rejects.toThrow('pagination cursor repeated')
 
     // First page fetched with the href unseen (it gets recorded), second page
     // fetched by following that href; on the second page the same href is

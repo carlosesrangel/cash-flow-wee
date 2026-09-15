@@ -1,5 +1,7 @@
 'use client'
 
+import { CashFlowPeriodFilter } from '@/components/filters/cash-flow-period-filter'
+
 import { useMemo, useState } from 'react'
 import { formatBRL } from '@/lib/format/currency'
 import { AccountsPayableTable, type AccountsPayableRow } from '@/components/cash-flow/accounts-payable-table'
@@ -13,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
-import { getCashFlowDateRange, type CashFlowDatePreset } from '@/lib/cash-flow/date-presets'
+import { getCashFlowDateRange } from '@/lib/cash-flow/date-presets'
 
 const STATUS_FILTERS: Array<{ value: PayableFilterState['status']; label: string }> = [
   { value: 'all', label: 'Todas' },
@@ -50,6 +52,8 @@ export function AccountsPayableFilters({
   const filteredRows = useMemo(() => rows.filter((row) => matchesPayableFilter(row, filters)), [rows, filters])
   const totals = useMemo(() => calculatePayableTotals(filteredRows), [filteredRows])
   const hasUncategorized = rows.some((row) => !row.categoria?.trim())
+  const periodFrom: string = filters.dateFrom || getCashFlowDateRange('proximos-30', today)[0]
+  const periodTo: string = filters.dateTo || getCashFlowDateRange('proximos-30', today)[1]
   const defaultFrom = getCashFlowDateRange('proximos-30', today)[0]
   const defaultTo = getCashFlowDateRange('proximos-30', today)[1]
   const hasActiveFilters = filters.status !== 'all' || filters.categoria !== 'all' || Boolean(filters.fornecedor) || filters.minValue !== null || filters.maxValue !== null || filters.dateFrom !== defaultFrom || filters.dateTo !== defaultTo
@@ -65,7 +69,7 @@ export function AccountsPayableFilters({
         ))}
       </div>
 
-      <div className="space-y-2"><p className="text-sm font-semibold">Data de vencimento</p><div className="flex flex-wrap gap-2">{(['ontem', 'hoje', 'este-mes', 'mes-anterior', 'este-ano', 'ano-anterior', 'proximo-mes', 'proximos-30', 'ultimos-30'] as CashFlowDatePreset[]).map((preset) => { const range = getCashFlowDateRange(preset, today); const labels: Record<CashFlowDatePreset, string> = { ontem: 'Ontem', hoje: 'Hoje', 'este-mes': 'Este mês', 'mes-anterior': 'Mês anterior', 'este-ano': 'Este ano', 'ano-anterior': 'Ano anterior', 'proximo-mes': 'Próximo mês', 'proximos-30': 'Próximos 30 dias', 'ultimos-30': 'Últimos 30 dias' }; return <Button key={preset} type="button" size="sm" variant={filters.dateFrom === range[0] && filters.dateTo === range[1] ? 'default' : 'outline'} onClick={() => setFilters((previous) => ({ ...previous, dateFrom: range[0], dateTo: range[1] }))}>{labels[preset]}</Button> })}</div><div className="grid grid-cols-2 gap-2"><label className="text-xs text-muted-foreground">De<input aria-label="Vencimento de" type="date" value={filters.dateFrom} onChange={(e) => setFilters((previous) => ({ ...previous, dateFrom: e.target.value }))} className="mt-1 w-full rounded-md border px-2 py-2 text-sm" /></label><label className="text-xs text-muted-foreground">Até<input aria-label="Vencimento até" type="date" value={filters.dateTo} onChange={(e) => setFilters((previous) => ({ ...previous, dateTo: e.target.value }))} className="mt-1 w-full rounded-md border px-2 py-2 text-sm" /></label></div></div>
+      <CashFlowPeriodFilter from={periodFrom} to={periodTo} today={today} onChange={(dateFrom, dateTo) => setFilters(previous => ({ ...previous, dateFrom, dateTo }))} />
 
       <div className="grid gap-3 md:grid-cols-3">
         <label className="space-y-1 text-sm font-medium">

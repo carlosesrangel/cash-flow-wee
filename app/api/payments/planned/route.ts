@@ -1,9 +1,9 @@
+import { paymentPeriodSchema } from '@/lib/payments/period'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getCurrentMember } from '@/lib/auth/session'
 import { loadPayableCandidates, loadPlannedPayments, savePlannedPayment, savePlannedPayments, deletePlannedPayment } from '@/lib/payments/engine'
 
-const querySchema = z.object({ orgId: z.string().uuid() })
 const paymentSchema = z.object({ apId: z.string().uuid(), plannedDate: z.string().date() })
 const bodySchema = z.union([paymentSchema, z.object({ payments: z.array(paymentSchema).min(1) })])
 
@@ -11,8 +11,10 @@ export async function GET(req: NextRequest) {
   const member = await getCurrentMember()
   if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const period = paymentPeriodSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams))
+  if (!period.success) return NextResponse.json({ error: period.error.issues[0].message }, { status: 400 })
   try {
-    const [payments, candidates] = await Promise.all([loadPlannedPayments(member.orgId), loadPayableCandidates(member.orgId)])
+    const [payments, candidates] = await Promise.all([loadPlannedPayments(member.orgId), loadPayableCandidates(member.orgId, period.data)])
     return NextResponse.json({ payments, candidates })
   } catch (error) {
       // Error suppressed

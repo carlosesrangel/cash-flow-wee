@@ -1,12 +1,13 @@
 name: Atualização Financeira Derivada
 
 on:
-  workflow_run:
-    workflows:
-      - Sincronização Olist Diária
-      - Sincronização SumUp Diária
-    types: [completed]
   workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: production-financial-writes
+  cancel-in-progress: false
 
 jobs:
   refresh:

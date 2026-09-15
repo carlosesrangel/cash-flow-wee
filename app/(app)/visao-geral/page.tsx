@@ -1,6 +1,6 @@
 import { getCurrentMember } from '@/lib/auth/session'
 import { canManageCashBalance } from '@/lib/auth/rbac'
-import { resolveOpeningBalance, buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { buildCashFlowDays } from '@/lib/cash-flow/engine'
 import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
 import { getMinimumProjectedBalance } from '@/lib/cash-flow/aggregate'
 import { calculateDashboardKpis } from '@/lib/cash-flow/dashboard-kpis'
@@ -63,15 +63,8 @@ export default async function VisaoGeralPage() {
   const entries = await loadCanonicalCashFlow(member.orgId)
   const days = await buildCashFlowDays(member.orgId, from, to, entries)
 
-  // Independently anchored at "today" (not `from`, which is 90 days in the
-  // past) so a snapshot recorded today is picked up immediately, and built
-  // purely from resolveOpeningBalance's realizado-only accounting — never
-  // the day array's blended saldoInicial, which includes unrealized
-  // (contratado) AR/AP and would misrepresent an unconfirmed projection as
-  // today's actual balance.
-  const currentBalance = await resolveOpeningBalance(member.orgId, shiftDateString(today, 1), entries)
-  const saldoAtual = currentBalance?.balance ?? null
-  const saldoAtualAsOf = currentBalance?.asOf ?? null
+  const saldoAtual = days.find(day => day.date === today)?.saldoFinal ?? null
+  const saldoAtualAsOf = today
 
   const kpis = calculateDashboardKpis(days, today, saldoAtual)
 

@@ -1,3 +1,5 @@
+import { withIntegrationLock } from '@/lib/integrations/lock'
+import { loadSyncCheckpoint } from '@/lib/integrations/checkpoint'
 import { startSyncRun, finishSyncRun } from '@/lib/olist/sync/run-context'
 import { syncSumupTransactions } from '@/lib/sumup/sync/transactions'
 import { syncSumupPayouts } from '@/lib/sumup/sync/payouts'
@@ -23,14 +25,15 @@ async function runLeg(leg: () => Promise<{ received: number }>): Promise<LegOutc
 }
 
 export async function runSumupSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean } = {}): Promise<void> {
+  return withIntegrationLock(orgId, 'financial-sync', 10800, () => executeSync(orgId, mode, options))
+}
+
+async function executeSync(orgId: string, mode: 'initial' | 'incremental', options: { refreshDerived?: boolean }): Promise<void> {
+  const since = mode === 'incremental' ? await loadSyncCheckpoint(orgId, 'sumup') : undefined
   const runId = await startSyncRun(orgId, 'sumup')
 
-  // The 24h incremental window is only ever applied on a manual trigger (there
-  // is no scheduler in this phase), so gaps wider than 24h between triggers can
-  // miss changes — see docs/assumptions.md, "Riscos conhecidos (Fase 3)".
-  const since = mode === 'incremental' ? new Date(Date.now() - 24 * 60 * 60 * 1000) : undefined
   const transactionsOptions = since ? { since } : {}
-  const payoutsOptions = mode === 'initial' ? { windowDays: 3650 } : {}
+  const payoutsOptions = { windowDays: since ? Math.max(90, Math.ceil((Date.now() - since.getTime()) / 86400000)) : 3650 }
 
   // Payouts first: it is a single cheap call, while transactions issues one
   // detail request per transaction and is the leg most likely to break on a bad

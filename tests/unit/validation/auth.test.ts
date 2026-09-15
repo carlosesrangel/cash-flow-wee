@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { loginSchema, inviteMemberSchema } from '@/lib/validation/auth'
+import { loginSchema, inviteMemberSchema, setPasswordSchema } from '@/lib/validation/auth'
 
 describe('loginSchema', () => {
   it('accepts a valid email and non-empty password', () => {
@@ -27,5 +27,15 @@ describe('inviteMemberSchema', () => {
   it('rejects an invalid role', () => {
     const result = inviteMemberSchema.safeParse({ email: 'a@wee.com.br', role: 'SUPERUSER' })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('setPasswordSchema', () => {
+  it('accepts matching passwords with at least 8 characters', () => {
+    expect(setPasswordSchema.safeParse({ password: 'senha123', passwordConfirmation: 'senha123' }).success).toBe(true)
+  })
+
+  it('rejects mismatched passwords', () => {
+    expect(setPasswordSchema.safeParse({ password: 'senha123', passwordConfirmation: 'senha456' }).success).toBe(false)
   })
 })

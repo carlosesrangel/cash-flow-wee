@@ -45,7 +45,7 @@ git push -u origin main
 1. Ir para [supabase.com](https://supabase.com)
 2. Clicar em "New Project"
 3. Preencher:
-   - **Name:** `wee-cash-flow`
+   - **Name:** `cash-flow-wee`
    - **Database Password:** Guardar com segurança
    - **Region:** Escolher mais perto (ex: us-east-1)
 4. Clicar "Create new project"
@@ -112,7 +112,7 @@ SUPABASE_SERVICE_ROLE_KEY = [seu valor secreto]
 ```
 OLIST_CLIENT_ID = [seu client ID da Olist]
 OLIST_CLIENT_SECRET = [seu secret da Olist]
-OLIST_REDIRECT_URI = https://wee-cash-flow.vercel.app/api/auth/olist/callback
+OLIST_REDIRECT_URI = https://cash-flow-wee.vercel.app/api/integracoes/olist/callback
 OLIST_STATE_SECRET = [gerar random: openssl rand -hex 32]
 OLIST_RATE_LIMIT_PER_MINUTE = 25
 ```
@@ -133,7 +133,7 @@ SUMUP_MERCHANT_CODE = [seu merchant code]
 ### 3.4 Deploy Inicial
 1. Clicar "Deploy"
 2. Aguardar build (≈3-5 minutos)
-3. Testar em `https://wee-cash-flow.vercel.app`
+3. Testar em `https://cash-flow-wee.vercel.app`
 
 ---
 
@@ -141,14 +141,23 @@ SUMUP_MERCHANT_CODE = [seu merchant code]
 
 ### 4.1 Supabase Auth via Email
 1. Supabase Dashboard → "Authentication" → "Providers"
-2. Email ativado por padrão
-3. Configurar "Email Templates" se necessário
+2. Em **URL Configuration**, defina o **Site URL** como a URL pública do WEE e adicione aos Redirect URLs:
+   - `https://seu-dominio.com/auth/complete*`
+   - `https://seu-dominio.com/auth/callback*`
+   - `https://seu-dominio.com/auth/confirm*`
+3. No template **Invite user**, use o fluxo server-side:
+   ```text
+   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/auth/set-password
+   ```
+   O convite enviado pela tela de Configurações já usa `/auth/complete`; o template acima também mantém compatibilidade com convites enviados diretamente pelo Dashboard do Supabase.
+4. Email ativado por padrão
+5. Configurar "Email Templates" se necessário
 
 ### 4.2 Integração OAuth (Olist)
 1. Olist Developer Portal:
    - Registrar aplicação
    - Obter Client ID/Secret
-   - Set Redirect URI: `https://wee-cash-flow.vercel.app/api/auth/olist/callback`
+   - Set Redirect URI: `https://cash-flow-wee.vercel.app/api/integracoes/olist/callback`
 
 ### 4.3 SumUp API
 1. SumUp Developer:

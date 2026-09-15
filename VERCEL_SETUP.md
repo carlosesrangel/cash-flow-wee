@@ -36,7 +36,7 @@ SUMUP_MERCHANT_CODE=[seu-valor]
 OLIST_CLIENT_ID=[seu-valor]
 OLIST_CLIENT_SECRET=[seu-valor]
 OLIST_STATE_SECRET=[seu-valor]
-OLIST_REDIRECT_URI=https://wee-cash-flow.vercel.app/api/auth/olist/callback
+OLIST_REDIRECT_URI=https://cash-flow-wee.vercel.app/api/integracoes/olist/callback
 ```
 
 3. Clique em **"Save"**
@@ -46,11 +46,11 @@ OLIST_REDIRECT_URI=https://wee-cash-flow.vercel.app/api/auth/olist/callback
 O primeiro deploy pode levar **3-5 minutos**. Você verá:
 - ✅ Build completo
 - ✅ Deployment completo
-- Acesso em: **https://wee-cash-flow.vercel.app**
+- Acesso em: **https://cash-flow-wee.vercel.app**
 
 ## Passo 5: Testar Aplicação
 
-1. Acesse https://wee-cash-flow.vercel.app
+1. Acesse https://cash-flow-wee.vercel.app
 2. Veja a página inicial carregando
 3. Tente criar uma organização ou fazer login
 

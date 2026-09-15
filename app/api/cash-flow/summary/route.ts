@@ -1,3 +1,6 @@
+import { loadCanonicalCashFlow } from '@/lib/ledger/canonical-cash-flow'
+import { buildCashFlowDays } from '@/lib/cash-flow/engine'
+import { paymentPeriodSchema } from '@/lib/payments/period'
 /**
  * GET /api/cash-flow/summary
  *
@@ -12,7 +15,7 @@
  * Returns: cash flow per period with KPI metrics
  */
 
-import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getCurrentMember } from '@/lib/auth/session'
 import { NextRequest, NextResponse } from 'next/server'
 
 interface CashFlowPeriod {
@@ -20,7 +23,7 @@ interface CashFlowPeriod {
   entradas: number
   saidas: number
   saldo: number
-  saldo_acumulado: number
+  saldo_acumulado: number | null
   qtd_entradas: number
   qtd_saidas: number
   ticket_medio_entrada?: number
@@ -28,14 +31,16 @@ interface CashFlowPeriod {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const admin = createAdminSupabaseClient()
+  const member = await getCurrentMember()
+  if (!member) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // For development: extract org_id from query param
-    const orgId = req.nextUrl.searchParams.get('org_id')
-    if (!orgId) {
-      return NextResponse.json({ error: 'org_id required' }, { status: 400 })
-    }
+  const requestedOrgId = req.nextUrl.searchParams.get('org_id')
+  if (requestedOrgId && requestedOrgId !== member.orgId) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+  }
+
+  try {
+    const orgId = member.orgId
     const searchParams = req.nextUrl.searchParams
     const period = searchParams.get('period') || 'month'
     const toDateStr = searchParams.get('to_date') || new Date().toISOString().split('T')[0]
@@ -46,20 +51,12 @@ export async function GET(req: NextRequest) {
     defaultFromDate.setDate(defaultFromDate.getDate() - 90)
     const fromDate = searchParams.get('from_date') || defaultFromDate.toISOString().split('T')[0]
 
-    // Load ledger entries
-    const statuses = includeProjected ? ['actual', 'scheduled', 'projected'] : ['actual', 'scheduled']
-    const { data: entries, error } = await admin
-      .from('financial_ledger')
-      .select('event_date, amount, direction')
-      .eq('org_id', orgId)
-      .in('status', statuses)
-      .gte('event_date', fromDate)
-      .lte('event_date', toDateStr)
-      .order('event_date', { ascending: true })
-
-    if (error) {
-      throw error
-    }
+    if (!paymentPeriodSchema.safeParse({ from: fromDate, to: toDateStr }).success || !['day','month','year'].includes(period)) return NextResponse.json({ error: 'Invalid period' }, { status: 400 })
+    const allEntries = (await loadCanonicalCashFlow(orgId)).filter(e => includeProjected || e.bucket !== 'projetado')
+    const entries = allEntries.filter(e => e.date >= fromDate && e.date <= toDateStr).map(e => ({ ...e, event_date: e.date }))
+    const days = await buildCashFlowDays(orgId, fromDate, toDateStr, allEntries)
+    const closing = new Map<string, number | null>()
+    for (const day of days) closing.set(period === 'month' ? day.date.slice(0, 7) : period === 'year' ? day.date.slice(0, 4) : day.date, day.saldoFinal)
 
     // Aggregate by period
     const byPeriod = new Map<string, { entradas: number; saidas: number; qtd_entradas: number; qtd_saidas: number }>()
@@ -86,23 +83,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    for (const key of closing.keys()) if (!byPeriod.has(key)) byPeriod.set(key, { entradas: 0, saidas: 0, qtd_entradas: 0, qtd_saidas: 0 })
     // Sort periods
     const periods = Array.from(byPeriod.keys()).sort()
 
     // Build result with running balance
-    let acumulado = 0
     const result: CashFlowPeriod[] = []
     for (const p of periods) {
       const data = byPeriod.get(p)!
       const saldo = data.entradas - data.saidas
-      acumulado += saldo
 
       result.push({
         period: p,
         entradas: Math.round(data.entradas * 100) / 100,
         saidas: Math.round(data.saidas * 100) / 100,
         saldo: Math.round(saldo * 100) / 100,
-        saldo_acumulado: Math.round(acumulado * 100) / 100,
+        saldo_acumulado: closing.get(p) ?? null,
         qtd_entradas: data.qtd_entradas,
         qtd_saidas: data.qtd_saidas,
         ticket_medio_entrada: data.qtd_entradas > 0 ? Math.round((data.entradas / data.qtd_entradas) * 100) / 100 : 0,
@@ -116,9 +112,9 @@ export async function GET(req: NextRequest) {
     const kpis = {
       total_entradas: Math.round(totalEntradas * 100) / 100,
       total_saidas: Math.round(totalSaidas * 100) / 100,
-      saldo_final: Math.round((totalEntradas - totalSaidas) * 100) / 100,
+      saldo_final: days.at(-1)?.saldoFinal ?? null,
       taxa_saidas_media: totalEntradas > 0 ? Math.round((totalSaidas / totalEntradas) * 10000) / 100 : 0,
-      ticket_medio: result.length > 0 ? Math.round((totalEntradas / result.reduce((s, p) => s + p.qtd_entradas, 0)) * 100) / 100 : 0,
+      ticket_medio: result.some(p => p.qtd_entradas > 0) ? Math.round((totalEntradas / result.reduce((s, p) => s + p.qtd_entradas, 0)) * 100) / 100 : 0,
       periodos: result.length,
     }
 

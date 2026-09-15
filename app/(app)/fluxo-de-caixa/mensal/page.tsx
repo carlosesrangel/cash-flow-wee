@@ -28,33 +28,15 @@ export default async function FluxoDeCaixaMensalPage({
 
   const { mes, forecast, payments } = await searchParams
   const showForecast = forecast !== 'false'
-  const showPayments = payments !== 'false'
+  const showPayments = payments === 'true'
   const month = mes && /^\d{4}-\d{2}$/.test(mes) ? mes : toLocalDateParam(new Date()).slice(0, 7)
   const from = `${month}-01`
   const to = lastDayOfMonth(month)
 
-  const actualEntries = (await loadCanonicalCashFlow(member.orgId)).filter((entry) => entry.description !== 'Entrada projetada')
-  const supabase = await createServerSupabaseClient()
-
-  let entries = actualEntries
-  if (showForecast) {
-    const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
-    const now = new Date()
-    const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-    const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
-    entries = mergeCashFlowWithForecast(actualEntries, forecastEntries, today)
-  }
-
-  if (showPayments) {
-    entries = await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
-    if (showForecast) {
-      const forecastEntries = await loadCanonicalForecastedCashFlowEntries(member.orgId, 'base', supabase)
-      const now = new Date()
-      const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      const today = { ano: brazilTime.getFullYear(), mes: brazilTime.getMonth() + 1 }
-      entries = mergeCashFlowWithForecast(entries, forecastEntries, today)
-    }
-  }
+  const canonicalEntries = showPayments
+    ? await loadCashFlowWithPlannedPayments(member.orgId, undefined, true)
+    : await loadCanonicalCashFlow(member.orgId)
+  const entries = showForecast ? canonicalEntries : canonicalEntries.filter(entry => entry.bucket !== 'projetado')
 
   const days = await buildCashFlowDays(member.orgId, from, to, entries)
 
@@ -70,7 +52,7 @@ export default async function FluxoDeCaixaMensalPage({
             Mês
           </label>
           <input id="mes" name="mes" type="month" defaultValue={month} className="rounded border px-2 py-1 text-sm" />
-          <button type="submit" className="rounded border px-3 py-1 text-sm font-medium">
+          <input type="hidden" name="forecast" value={String(showForecast)} /><input type="hidden" name="payments" value={String(showPayments)} /><button type="submit" className="rounded border px-3 py-1 text-sm font-medium">
             Ver
           </button>
         </form>

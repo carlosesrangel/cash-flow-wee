@@ -1,11 +1,14 @@
 import 'server-only'
 import { signState } from '@/lib/olist/state'
 import { recordExternalFailure } from '@/lib/observability/telemetry'
-import { sanitizeIntegrationError } from '@/lib/observability/health'
 
 const AUTHORIZE_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth'
 const TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token'
 const TOKEN_REQUEST_TIMEOUT_MS = 15_000
+
+export class OAuthTokenError extends Error {
+  constructor(public readonly oauthCode: string, status: number) { super(`Olist token request failed (${status}): ${oauthCode}`) }
+}
 
 export type OlistTokens = {
   accessToken: string
@@ -50,12 +53,13 @@ async function requestTokens(body: URLSearchParams): Promise<OlistTokens> {
 
   if (!response.ok) {
     recordExternalFailure({ provider: 'olist-oauth', endpoint: TOKEN_URL, status: response.status, startedAt })
-    const detail = await response.text()
-    const safe = sanitizeIntegrationError(String(response.status), detail)
-    throw new Error(`Olist token request failed (${response.status}): ${safe.message ?? 'upstream error'}`)
+    const body = await response.json().catch(() => ({}))
+    const code = ['invalid_grant', 'invalid_client', 'temporarily_unavailable'].includes(body.error) ? body.error : 'upstream_error'
+    throw new OAuthTokenError(code, response.status)
   }
 
   const data = await response.json()
+  if (typeof data.access_token !== 'string' || !data.access_token || typeof data.refresh_token !== 'string' || !data.refresh_token || !Number.isFinite(data.expires_in) || data.expires_in <= 0) throw new Error('Invalid Olist token response')
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
