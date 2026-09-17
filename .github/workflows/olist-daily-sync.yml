@@ -2,7 +2,7 @@ name: Sincroniza??o Olist Di?ria
 
 on:
   schedule:
-    - cron: '17 */4 * * *'
+    - cron: '17 9,21 * * *'
   workflow_dispatch:
     inputs:
       mode:
